@@ -78,6 +78,8 @@ on:
 
 jobs:
   deploy-customer:
+    outputs:
+      pr_url: ${{ steps.create_pr.outputs.pr_url }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -210,6 +212,7 @@ jobs:
           git push origin feature/customer-${{ github.event.inputs.customer_name }}
 
       - name: Create Pull Request
+        id: create_pr
         run: |
           gh pr create \
             --title "Onboard new customer: ${{ github.event.inputs.customer_name }}" \
@@ -224,5 +227,8 @@ jobs:
             --base master \
             --head feature/customer-${{ github.event.inputs.customer_name }} \
             --label "READY FOR MERGE"
+            
+          echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
+          echo "✅ PR created: $PR_URL"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
