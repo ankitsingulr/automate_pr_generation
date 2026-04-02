@@ -1,0 +1,204 @@
+name: Onboard New Customer
+
+on:
+  workflow_dispatch:
+    inputs:
+      customer_name:
+        description: "Name of the customer to deploy"
+        required: true
+        type: string
+      environment:
+        description: "Environment (production/development)"
+        required: false
+        type: choice
+        options:
+          - PROD
+          - DEV
+      image_id:
+        description: "Build Images to deploy"
+        required: true
+        type: string
+      auth_project_id:
+        description: "Authentication project ID"
+        required: false
+        default: ""
+        type: string
+      singulr_platform_instance_type:
+        description: "Singulr platform instance type"
+        required: false
+        type: choice
+        options:
+          - None
+          - m5.2xlarge
+          - m5.4xlarge
+      singulr_graph_instance_type:
+        description: "Singulr graph instance type"
+        required: false
+        type: choice
+        options:
+          - None
+          - m5.xlarge
+          - m5.2xlarge
+      singulr_collector_instance_type:
+        description: "Singulr collector instance type"
+        required: false
+        type: choice
+        options:
+          - None
+          - m5.xlarge
+          - m5.2xlarge
+      singulr_psql_instance_type:
+        description: "Singulr psql instance type"
+        required: false
+        type: choice
+        options:
+          - None
+          - db.r5.large
+          - db.r5.xlarge
+      tenant_id:
+        description: "Tenant ID"
+        required: false
+        type: string
+      platform_count:
+        description: "Number of platforms to deploy"
+        required: false
+        type: string
+      collector_count:
+        description: "Number of collectors to deploy"
+        required: false
+        type: string
+      cert_arn:
+        description: "Certificate ARN for SSL"
+        required: false
+        type: string
+      domain_name:
+        description: "Domain name"
+        required: true
+        type: string
+
+jobs:
+  deploy-customer:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.7
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: |
+          pip install descope
+
+      - name: Create environment folder
+        run: |
+          mkdir -p terraform1/env/${{ github.event.inputs.customer_name }}
+
+          # Create tfvars file
+          cat > terraform1/env/${{ github.event.inputs.customer_name }}/${{ github.event.inputs.customer_name }}.tfvars << EOF
+          customer_name = "${{ github.event.inputs.customer_name }}"
+          ${{ github.event.inputs.environment && format('singulr_env = "%s"', github.event.inputs.environment) || '' }}
+          aws_region = "us-east-1"
+          ${{ github.event.inputs.platform_count && format('platform_count = %s', github.event.inputs.platform_count) || '' }}
+          ${{ github.event.inputs.collector_count && format('collector_count = %s', github.event.inputs.collector_count) || '' }}
+          image_id = "${{ github.event.inputs.image_id }}"
+          ${{ github.event.inputs.auth_project_id && format('auth_project_id = "%s"', github.event.inputs.auth_project_id) || '' }}
+          ${{ github.event.inputs.singulr_platform_instance_type && format('singulr_platform_instance_type = "%s"', github.event.inputs.singulr_platform_instance_type) || '' }}
+          ${{ github.event.inputs.singulr_graph_instance_type && format('singulr_graph_instance_type = "%s"', github.event.inputs.singulr_graph_instance_type) || '' }}
+          ${{ github.event.inputs.singulr_collector_instance_type && format('collector_instance_type = "%s"', github.event.inputs.singulr_collector_instance_type) || '' }}
+          ${{ github.event.inputs.singulr_psql_instance_type && format('psql_instance_type = "%s"', github.event.inputs.singulr_psql_instance_type) || '' }}
+          ${{ github.event.inputs.tenant_id && format('default_tenant_id = "%s"', github.event.inputs.tenant_id) || '' }}
+          ${{ github.event.inputs.cert_arn && format('cert_arn = "%s"', github.event.inputs.cert_arn) || '' }}
+          domain_name = "${{ github.event.inputs.domain_name }}"
+          EOF
+
+          # Create backend-config.hcl file
+          cat > terraform1/env/${{ github.event.inputs.customer_name }}/backend-config.hcl << EOF
+          backend "s3" {
+            encrypt = true
+            bucket = "singulr-terraform-state"
+            key    = "${{ github.event.inputs.customer_name }}/terraform.tfstate"
+            region = "us-east-1"
+          }
+          EOF
+
+      - name: Initialize Terraform
+        run: |
+          cd terraform1
+          terraform init -var env/${{ github.event.inputs.customer_name }}/${{ github.event.inputs.customer_name }}.tfvars -reconfigure
+
+      - name: Plan Terraform
+        run: |
+          cd terraform1
+          terraform plan -var-file=env/${{ github.event.inputs.customer_name }}/${{ github.event.inputs.customer_name }}.tfvars
+
+      - name: Apply Terraform
+        run: |
+          cd terraform1
+          terraform apply -var-file=env/${{ github.event.inputs.customer_name }}/${{ github.event.inputs.customer_name }}.tfvars
+
+      - name: Get Terraform outputs
+        id: terraform-outputs
+        run: |
+          cd terraform1
+          echo "tenant_id=$(terraform output -raw tenant_id)" >> $GITHUB_OUTPUTS
+          echo "cert_arn=$(terraform output -raw cert_arn)" >> $GITHUB_OUTPUTS
+
+      - name: Create feature branch
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b feature/customer-${{ github.event.inputs.customer_name }}
+          git add .
+          git commit -m "Add new customer: ${{ github.event.inputs.customer_name }}
+
+          - New tenant configuration files
+          - Updated tenant_details.json with new tenant ID
+          - Infrastructure deployment for ${{ github.event.inputs.customer_name }}
+
+          Auto-generated by GitHub Actions workflow."
+          git push origin feature/customer-${{ github.event.inputs.customer_name }}
+
+      - name: Create Pull Request
+        run: |
+          gh pr create \
+            --title "Onboard new customer: ${{ github.event.inputs.customer_name }}" \
+            --body "This PR adds infrastructure for new customer ${{ github.event.inputs.customer_name }}.
+
+          ## Changes
+          - New tenant configuration files in env/${{ github.event.inputs.customer_name }}/
+          - Updated tenant_details.json with new tenant ID
+          - Infrastructure deployment for ${{ github.event.inputs.customer_name }}
+
+          ## customer Details
+          - **deployment_id**: ${{ steps.terraform-outputs.outputs.deployment_id }}
+          - **Tenant ID**: ${{ steps.terraform-outputs.outputs.tenant_id }}
+          - **Certificate ARN**: ${{ steps.terraform-outputs.outputs.cert_arn }}
+
+          Auto-generated by GitHub Actions workflow." \
+            --base master \
+            --head feature/customer-${{ github.event.inputs.customer_name }} \
+            --label "READY FOR MERGE"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
