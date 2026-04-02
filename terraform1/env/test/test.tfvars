@@ -1,0 +1,9 @@
+customer_name = "test"
+aws_region = "us-east-1"
+image_id = "0.9.0ankit"
+domain_name = "test.singulr.ai"
+singulr_env = "PROD"
+platform_count = 1
+auth_project_id = "ankit9113499581"
+singulr_platform_instance_type = "m5.2xlarge"
+cert_arn = "arn:ankit:test"
