@@ -114,25 +114,60 @@ jobs:
 
       - name: Create environment folder
         run: |
-          mkdir -p terraform1/env/${{ github.event.inputs.customer_name }}
-
-          # Create tfvars file
-          cat > terraform1/env/${{ github.event.inputs.customer_name }}/${{ github.event.inputs.customer_name }}.tfvars << EOF
-          customer_name = "${{ github.event.inputs.customer_name }}"
-          ${{ github.event.inputs.environment && format('singulr_env = "%s"', github.event.inputs.environment) || '' }}
-          aws_region = "us-east-1"
-          ${{ github.event.inputs.platform_count && format('platform_count = "%s"', github.event.inputs.platform_count) || '' }}
-          ${{ github.event.inputs.collector_count && format('collector_count = "%s"', github.event.inputs.collector_count) || '' }}
-          image_id = "${{ github.event.inputs.image_id }}"
-          ${{ github.event.inputs.auth_project_id && format('auth_project_id = "%s"', github.event.inputs.auth_project_id) || '' }}
-          ${{ github.event.inputs.singulr_platform_instance_type && format('singulr_platform_instance_type = "%s"', github.event.inputs.singulr_platform_instance_type) || '' }}
-          ${{ github.event.inputs.singulr_graph_instance_type && format('singulr_graph_instance_type = "%s"', github.event.inputs.singulr_graph_instance_type) || '' }}
-          ${{ github.event.inputs.singulr_collector_instance_type && format('collector_instance_type = "%s"', github.event.inputs.singulr_collector_instance_type) || '' }}
-          ${{ github.event.inputs.singulr_psql_instance_type && format('psql_instance_type = "%s"', github.event.inputs.singulr_psql_instance_type) || '' }}
-          ${{ github.event.inputs.tenant_id && format('default_tenant_id = "%s"', github.event.inputs.tenant_id) || '' }}
-          ${{ github.event.inputs.cert_arn && format('cert_arn = "%s"', github.event.inputs.cert_arn) || '' }}
-          domain_name = "${{ github.event.inputs.domain_name }}"
-          EOF
+          DIR="terraform1/env/${{ github.event.inputs.customer_name }}"
+          FILE="$DIR/${{ github.event.inputs.customer_name }}.tfvars"
+      
+          mkdir -p "$DIR"
+      
+          echo "customer_name = \"${{ github.event.inputs.customer_name }}\"" > "$FILE"
+          echo "aws_region = \"us-east-1\"" >> "$FILE"
+          echo "image_id = \"${{ github.event.inputs.image_id }}\"" >> "$FILE"
+          echo "domain_name = \"${{ github.event.inputs.domain_name }}\"" >> "$FILE"
+      
+          # Optional values (only added if provided)
+      
+          if [ -n "${{ github.event.inputs.environment }}" ]; then
+            echo "singulr_env = \"${{ github.event.inputs.environment }}\"" >> "$FILE"
+          fi
+      
+          if [ -n "${{ github.event.inputs.platform_count }}" ]; then
+            echo "platform_count = ${{ github.event.inputs.platform_count }}" >> "$FILE"
+          fi
+      
+          if [ -n "${{ github.event.inputs.collector_count }}" ]; then
+            echo "collector_count = ${{ github.event.inputs.collector_count }}" >> "$FILE"
+          fi
+      
+          if [ -n "${{ github.event.inputs.auth_project_id }}" ]; then
+            echo "auth_project_id = \"${{ github.event.inputs.auth_project_id }}\"" >> "$FILE"
+          fi
+      
+          if [ -n "${{ github.event.inputs.singulr_platform_instance_type }}" ]; then
+            echo "singulr_platform_instance_type = \"${{ github.event.inputs.singulr_platform_instance_type }}\"" >> "$FILE"
+          fi
+      
+          if [ -n "${{ github.event.inputs.singulr_graph_instance_type }}" ]; then
+            echo "singulr_graph_instance_type = \"${{ github.event.inputs.singulr_graph_instance_type }}\"" >> "$FILE"
+          fi
+      
+          if [ -n "${{ github.event.inputs.singulr_collector_instance_type }}" ]; then
+            echo "collector_instance_type = \"${{ github.event.inputs.singulr_collector_instance_type }}\"" >> "$FILE"
+          fi
+      
+          if [ -n "${{ github.event.inputs.singulr_psql_instance_type }}" ]; then
+            echo "psql_instance_type = \"${{ github.event.inputs.singulr_psql_instance_type }}\"" >> "$FILE"
+          fi
+      
+          if [ -n "${{ github.event.inputs.tenant_id }}" ]; then
+            echo "default_tenant_id = \"${{ github.event.inputs.tenant_id }}\"" >> "$FILE"
+          fi
+      
+          if [ -n "${{ github.event.inputs.cert_arn }}" ]; then
+            echo "cert_arn = \"${{ github.event.inputs.cert_arn }}\"" >> "$FILE"
+          fi
+      
+          echo "✅ Generated tfvars:"
+          cat "$FILE"
 
           # Create backend-config.hcl file
           cat > terraform1/env/${{ github.event.inputs.customer_name }}/backend-config.hcl << EOF
@@ -159,13 +194,6 @@ jobs:
           cd terraform1
           terraform apply -auto-approve -var-file=env/${{ github.event.inputs.customer_name }}/${{ github.event.inputs.customer_name }}.tfvars
 
-      - name: Get Terraform outputs
-        id: terraform-outputs
-        run: |
-          cd terraform1
-          echo "tenant_id=$(terraform output -raw tenant_id)" >> $GITHUB_OUTPUTS
-          echo "cert_arn=$(terraform output -raw cert_arn)" >> $GITHUB_OUTPUTS
-
       - name: Create feature branch
         run: |
           git config --global user.name "github-actions[bot]"
@@ -191,11 +219,6 @@ jobs:
           - New tenant configuration files in env/${{ github.event.inputs.customer_name }}/
           - Updated tenant_details.json with new tenant ID
           - Infrastructure deployment for ${{ github.event.inputs.customer_name }}
-
-          ## customer Details
-          - **deployment_id**: ${{ steps.terraform-outputs.outputs.deployment_id }}
-          - **Tenant ID**: ${{ steps.terraform-outputs.outputs.tenant_id }}
-          - **Certificate ARN**: ${{ steps.terraform-outputs.outputs.cert_arn }}
 
           Auto-generated by GitHub Actions workflow." \
             --base master \
