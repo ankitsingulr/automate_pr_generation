@@ -28,7 +28,7 @@ on:
         required: false
         type: choice
         options:
-          - None
+          - 
           - m5.2xlarge
           - m5.4xlarge
       singulr_graph_instance_type:
@@ -36,7 +36,7 @@ on:
         required: false
         type: choice
         options:
-          - None
+          - 
           - m5.xlarge
           - m5.2xlarge
       singulr_collector_instance_type:
@@ -44,7 +44,7 @@ on:
         required: false
         type: choice
         options:
-          - None
+          - 
           - m5.xlarge
           - m5.2xlarge
       singulr_psql_instance_type:
@@ -52,7 +52,7 @@ on:
         required: false
         type: choice
         options:
-          - None
+          - 
           - db.r5.large
           - db.r5.xlarge
       tenant_id:
