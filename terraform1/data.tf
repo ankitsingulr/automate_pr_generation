@@ -23,6 +23,7 @@ resource "null_resource" "setup_tenant" {
 
   provisioner "local-exec" {
     command = <<-EOF
+      pip3 install boto3
       python3 ../updating_json.py \
       "9878t6rfhji8y7t65rfghui8765" \
       '${jsonencode(var.collector)}' \
