@@ -1,0 +1,6 @@
+customer_name = "lop"
+aws_region = "us-east-1"
+image_id = "fdgyu"
+domain_name = "dfghjk"
+singulr_env = "PROD"
+cert_arn = "dfgh"
