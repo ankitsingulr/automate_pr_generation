@@ -62,11 +62,11 @@ on:
       platform_count:
         description: "Number of platforms to deploy"
         required: false
-        type: string
+        type: number
       collector_count:
         description: "Number of collectors to deploy"
         required: false
-        type: string
+        type: number
       cert_arn:
         description: "Certificate ARN for SSL"
         required: false
@@ -121,8 +121,8 @@ jobs:
           customer_name = "${{ github.event.inputs.customer_name }}"
           ${{ github.event.inputs.environment && format('singulr_env = "%s"', github.event.inputs.environment) || '' }}
           aws_region = "us-east-1"
-          ${{ github.event.inputs.platform_count && format('platform_count = %s', github.event.inputs.platform_count) || '' }}
-          ${{ github.event.inputs.collector_count && format('collector_count = %s', github.event.inputs.collector_count) || '' }}
+          ${{ github.event.inputs.platform_count && format('platform_count = "%s"', github.event.inputs.platform_count) || '' }}
+          ${{ github.event.inputs.collector_count && format('collector_count = "%s"', github.event.inputs.collector_count) || '' }}
           image_id = "${{ github.event.inputs.image_id }}"
           ${{ github.event.inputs.auth_project_id && format('auth_project_id = "%s"', github.event.inputs.auth_project_id) || '' }}
           ${{ github.event.inputs.singulr_platform_instance_type && format('singulr_platform_instance_type = "%s"', github.event.inputs.singulr_platform_instance_type) || '' }}
