@@ -78,8 +78,6 @@ on:
 
 jobs:
   deploy-customer:
-    outputs:
-      pr_url: ${{ steps.create_pr.outputs.pr_url }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -232,3 +230,7 @@ jobs:
           echo "✅ PR created: $PR_URL"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Show PR URL
+        run: |
+          echo "PR URL: ${{ steps.create_pr.outputs.pr_url }}"
