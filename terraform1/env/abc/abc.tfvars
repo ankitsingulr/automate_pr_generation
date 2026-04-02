@@ -1,0 +1,6 @@
+customer_name = "abc"
+aws_region = "us-east-1"
+image_id = "fgtyui"
+domain_name = "dfgtyui"
+singulr_env = "PROD"
+cert_arn = "arn:ankit:test"
