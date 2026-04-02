@@ -1,0 +1,6 @@
+customer_name = "clas"
+aws_region = "us-east-1"
+image_id = "gyui"
+domain_name = "fghjuio"
+singulr_env = "PROD"
+cert_arn = "opiuytredfgh"
