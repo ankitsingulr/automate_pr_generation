@@ -75,9 +75,16 @@ on:
         description: "Domain name"
         required: true
         type: string
+  workflow_call:
+    outputs:
+      pr_url:
+        description: "generated pr url"
+        value: ${{ jobs.deploy-customer.outputs.pr_url }}
 
 jobs:
   deploy-customer:
+    outputs:
+      pr_url: ${{ steps.create_pr.outputs.pr_url }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
