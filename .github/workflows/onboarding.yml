@@ -157,7 +157,7 @@ jobs:
       - name: Apply Terraform
         run: |
           cd terraform1
-          terraform apply -var-file=env/${{ github.event.inputs.customer_name }}/${{ github.event.inputs.customer_name }}.tfvars
+          terraform apply -auto-approve -var-file=env/${{ github.event.inputs.customer_name }}/${{ github.event.inputs.customer_name }}.tfvars
 
       - name: Get Terraform outputs
         id: terraform-outputs
