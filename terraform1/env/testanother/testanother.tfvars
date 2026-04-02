@@ -1,0 +1,6 @@
+customer_name = "testanother"
+aws_region = "us-east-1"
+image_id = "456789"
+domain_name = "sdfgh"
+singulr_env = "PROD"
+cert_arn = "45678"
