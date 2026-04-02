@@ -1,0 +1,6 @@
+customer_name = "test12"
+aws_region = "us-east-1"
+image_id = "0.9.0ankit12"
+domain_name = "test123.singulr.ai"
+singulr_env = "PROD"
+default_tenant_id = "1234567890"
