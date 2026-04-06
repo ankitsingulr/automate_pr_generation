@@ -1,0 +1,6 @@
+customer_name = "claster"
+aws_region = "us-east-1"
+image_id = "23456789"
+domain_name = "345678"
+singulr_env = "PROD"
+cert_arn = "2345678"

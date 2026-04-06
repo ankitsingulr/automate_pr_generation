@@ -1,0 +1,12 @@
+{
+  "cert_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "2345678"
+  },
+  "tenant_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "00000000-0000-0000-0000-000000002028"
+  }
+}
