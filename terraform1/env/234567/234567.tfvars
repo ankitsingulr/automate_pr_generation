@@ -1,0 +1,6 @@
+customer_name = "234567"
+aws_region = "us-east-1"
+image_id = "2345678"
+domain_name = "45678i"
+singulr_env = "PROD"
+cert_arn = "34567ft"
