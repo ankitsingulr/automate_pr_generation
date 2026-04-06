@@ -205,7 +205,7 @@ jobs:
         id: terraform_outputs
         run: |
           cd terraform1
-          terraform output -json > terraform_outputs.json
+          terraform output -json
           
           # Store outputs as workflow variables
           echo "cert_arn=$(terraform output -raw cert_arn)" >> $GITHUB_OUTPUT
