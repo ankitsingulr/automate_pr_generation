@@ -215,6 +215,21 @@ jobs:
           
           echo "All Terraform outputs captured"
 
+      - name: Update Upgrade Workflows with New Customer
+        run: |
+          # Install yq
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+          UPGRADE_WORKFLOW1=".github/workflows/upgrade_customer_with_image_tag.yaml"
+          UPGRADE_WORKFLOW2=".github/workflows/upgrade_ui.yml"
+          CUSTOMER="${{ github.event.inputs.customer_name }}"
+
+          yq -i '.on.workflow_dispatch.inputs.environment.options += ["'"$CUSTOMER"'"]' "$UPGRADE_WORKFLOW1"
+          yq -i '.on.workflow_dispatch.inputs.Environment.options += ["'"$CUSTOMER"'"]' "$UPGRADE_WORKFLOW2"
+
+          echo "Added $CUSTOMER to upgrade workflow options"
+
       - name: Create feature branch
         id: create_branch
         run: |
