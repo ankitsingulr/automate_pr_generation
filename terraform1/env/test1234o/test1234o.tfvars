@@ -1,0 +1,6 @@
+customer_name = "test1234o"
+aws_region = "us-east-1"
+image_id = "ertgfg"
+domain_name = "r56ytgh"
+singulr_env = "PROD"
+cert_arn = "retgh465t"

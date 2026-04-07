@@ -9,6 +9,7 @@ on:
         type: choice
         default: 'wwt'
         options:
+          - "test1234o"
           - 'magicleap'
           - 'ringcentral'
           - 'wwt'

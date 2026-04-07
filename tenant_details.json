@@ -167,5 +167,14 @@
         ],
         "tenant_id": "00000000-0000-0000-0000-000000002027",
         "tenant_endpoint": "https://test.singulr.ai"
+    },
+    "test1234o": {
+        "platform": "9878t6rfhji8y7t65rfghui8-0765",
+        "collectors": [
+            "hgytu",
+            "uytresdfguhi"
+        ],
+        "tenant_id": "00000000-0000-0000-0000-000000002028",
+        "tenant_endpoint": "https://test1234o.singulr.ai"
     }
 }
