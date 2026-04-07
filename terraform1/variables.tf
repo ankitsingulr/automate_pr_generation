@@ -7,7 +7,7 @@ variable "cert_arn" {
   default = ""
 }
 
-variable "platform_count" {
+variable "project_count" {
   type    = number
   default = 1
 }
