@@ -1,0 +1,6 @@
+customer_name = "tyyu"
+aws_region = "us-east-1"
+image_id = "r567u"
+domain_name = "fr5"
+singulr_env = "PROD"
+cert_arn = "567"
