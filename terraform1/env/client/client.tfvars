@@ -1,0 +1,6 @@
+customer_name = "client"
+aws_region = "us-east-1"
+image_id = "rtrt576yh"
+domain_name = "cr576yh"
+singulr_env = "PROD"
+cert_arn = "rd657yuvh"
