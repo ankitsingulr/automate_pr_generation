@@ -79,17 +79,12 @@ on:
 jobs:
   deploy-customer:
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: write   
-      pull-requests: write
-      workflows: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
