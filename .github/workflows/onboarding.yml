@@ -177,7 +177,7 @@ jobs:
 
       - name: Update Upgrade Workflow with New Customer
         run: |
-          CUSTOMER="${{ github.event.inputs.customer_name }}"
+          CUSTOMER='${{ github.event.inputs.customer_name }}'
           
           UPGRADE_WORKFLOW=".github/workflows/upgrade_customer_with_image_tag.yaml"
           ROLLBACK_WORKFLOW=".github/workflows/upgrade_ui.yml"  # second workflow
@@ -188,7 +188,7 @@ jobs:
             awk '
               /options:/ { 
                 print; 
-                print "          - \'"'$CUSTOMER'"\'";
+                print "          - \"'"$CUSTOMER"'\"";
                 next 
               } 
               { print } 
