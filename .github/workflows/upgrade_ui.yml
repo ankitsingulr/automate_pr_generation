@@ -1,0 +1,94 @@
+name: Upgrade UI
+
+on:
+  workflow_dispatch:
+    inputs:
+      Environment:
+        description: 'Environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - 'demo'
+          - 'staging'
+          - 'dev'
+          - 'qa'
+          - 'magicleap'
+          - 'ringcentral'
+          - 'wwt'
+          - 'gartner'
+          - 'deltadental'
+          - 'kvc'
+          - 'safeharbor'
+          - 'trace3'
+          - 'netscout'
+          - 'halock'
+          - 'nisa'
+          - 'abarcahealth'
+          - 'ibmdemo'
+          - 'incyte'
+          - 'jfshea'
+          - 'hivepro'
+          - 'brookfield'
+          - 'spotify'
+          - 'brookfield-demo'
+          - 'ccu'
+          - 'bsca'
+          - 'fis'
+          - 'nttj'
+
+run-name: Upgrade UI for ${{ inputs.environment }}
+
+jobs:
+  Upgrade-ui:
+    runs-on: [self-hosted, upgrade]
+    steps:
+      - name: Clean workspace
+        run: |
+          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
+          sudo rm -rf $GITHUB_WORKSPACE/*
+
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: create docker image for ui
+        run: |
+          docker build -t singulr-ui -f backend/devcluster/docker/ui/Dockerfile .
+      
+      - name: Upgrade UI
+        run: |
+            docker run \
+            -e AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
+            -e AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
+            -e AWS_REGION=us-east-1 \
+            singulr-ui deploy:env ${{ github.event.inputs.Environment }}
+
+  notify:
+    runs-on: ubuntu-latest
+    needs: Upgrade-ui
+    if: ${{ github.event.inputs.Environment != 'staging' }}
+    steps:
+    - name: Send message to Slack
+      env:
+        SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
+        USERNAME: ${{ github.actor }}
+        ENVIRONMENT: ${{ github.event.inputs.Environment }}
+        CHANNEL: ${{ github.event.inputs.Environment == 'demo' && vars.DEMO_UPGRADE_NOTIFICATION_CHANNEL || vars.PROD_UPGRADE_NOTIFICATION_CHANNEL }}
+        BRANCH: ${{ github.ref_name }}
+        COMMIT_ID: ${{ github.sha }}
+      run: |
+        curl -X POST \
+        -H "Authorization:Bearer $SLACK_TOKEN" \
+        -H "Content-type: application/json; charset=utf-8" \
+        --data "$(jq -n --arg channel "$CHANNEL" \
+                        --arg environment "$ENVIRONMENT" \
+                        --arg username "$USERNAME" \
+                        --arg branch "$BRANCH" \
+                        --arg commit_id "$COMMIT_ID" \
+                        '{
+                          channel: $channel,
+                          text: ":rocket: *UI Upgrade Notification* :rocket:\n\n:earth_africa: *Environment:* `\($environment)`\n:bust_in_silhouette: *User:* `\($username)`\n:herb: *Branch:* `\($branch)`\n:package: *Commit ID:* `\($commit_id)`",
+                          username: "GitHub Actions",
+                          icon_emoji: ":octocat:"
+                        }')" \
+        https://slack.com/api/chat.postMessage
