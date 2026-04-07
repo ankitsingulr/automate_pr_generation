@@ -7,7 +7,7 @@ variable "cert_arn" {
   default = ""
 }
 
-variable "cert_arn" {
+variable "platform_count" {
   type    = number
   default = 1
 }
