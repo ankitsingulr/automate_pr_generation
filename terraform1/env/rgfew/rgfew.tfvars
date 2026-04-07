@@ -1,0 +1,6 @@
+customer_name = "rgfew"
+aws_region = "us-east-1"
+image_id = "r3e"
+domain_name = "3rfvw"
+singulr_env = "PROD"
+cert_arn = "3rwcd"
