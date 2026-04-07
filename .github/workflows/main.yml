@@ -1,4 +1,4 @@
-name: Onboard New Customer
+name: Onboard New
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ on:
       
 jobs:
   deploy-customer:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
       
     steps:
       - name: Checkout repository
