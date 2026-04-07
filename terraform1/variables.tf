@@ -7,6 +7,11 @@ variable "cert_arn" {
   default = ""
 }
 
+variable "cert_arn" {
+  type    = number
+  default = 1
+}
+
 variable "collector" {
   type    = list(string)
   default = ["hgytu", "uytresdfguhi"]
