@@ -20,12 +20,13 @@ locals {
 
 
 resource "null_resource" "setup_tenant" {
+  count = var.project_count
 
   provisioner "local-exec" {
     command = <<-EOF
       pip3 install boto3
       python3 ../updating_json.py \
-      "9878t6rfhji8y7t65rfghui8765" \
+      "9878t6rfhji8y7t65rfghui8-${count.index}765" \
       '${jsonencode(var.collector)}' \
       ${local.customer_tenant_id} \
       "https://${var.customer_name}.singulr.ai" \
