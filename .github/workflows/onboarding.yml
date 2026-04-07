@@ -205,13 +205,15 @@ jobs:
         id: terraform_outputs
         run: |
           cd terraform1
-          terraform output -json
+          # Capture all terraform outputs as a single block
+          TERRAFORM_OUTPUTS=$(terraform output 2>/dev/null || echo "No outputs available")
           
-          # Store outputs as workflow variables
-          echo "cert_arn=$(terraform output -raw cert_arn)" >> $GITHUB_OUTPUT
-          echo "tenant_id=$(terraform output -raw tenant_id)" >> $GITHUB_OUTPUT
+          # Store the complete output as a single variable
+          echo "terraform_outputs<<EOF" >> $GITHUB_OUTPUT
+          echo "$TERRAFORM_OUTPUTS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
           
-          echo "✅ Terraform outputs captured"
+          echo "All Terraform outputs captured"
 
       - name: Create feature branch
         run: |
@@ -281,6 +283,12 @@ jobs:
           echo "- **Customer Name:** ${{ github.event.inputs.customer_name }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Domain:** ${{ github.event.inputs.domain_name }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Image ID:** ${{ github.event.inputs.image_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### :gear: Terraform Outputs" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo '${{ steps.terraform_outputs.outputs.terraform_outputs }}' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           
