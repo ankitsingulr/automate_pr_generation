@@ -1,0 +1,6 @@
+customer_name = "ert6y7u8i"
+aws_region = "us-east-1"
+image_id = "ertyui"
+domain_name = "ertyui"
+singulr_env = "PROD"
+cert_arn = "ertyu"
