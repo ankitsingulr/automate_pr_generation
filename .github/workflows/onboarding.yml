@@ -175,35 +175,6 @@ jobs:
           }
           EOF
 
-      - name: Initialize Terraform
-        run: |
-          cd terraform1
-          terraform init -var env/${{ github.event.inputs.customer_name }}/${{ github.event.inputs.customer_name }}.tfvars -reconfigure
-
-      - name: Plan Terraform
-        run: |
-          cd terraform1
-          terraform plan -var-file=env/${{ github.event.inputs.customer_name }}/${{ github.event.inputs.customer_name }}.tfvars
-
-      - name: Apply Terraform
-        run: |
-          cd terraform1
-          terraform apply -auto-approve -var-file=env/${{ github.event.inputs.customer_name }}/${{ github.event.inputs.customer_name }}.tfvars
-
-      - name: Capture Terraform Outputs
-        id: terraform_outputs
-        run: |
-          cd terraform1
-          # Capture all terraform outputs as a single block
-          TERRAFORM_OUTPUTS=$(terraform output 2>/dev/null || echo "No outputs available")
-          
-          # Store the complete output as a single variable
-          echo "terraform_outputs<<EOF" >> $GITHUB_OUTPUT
-          echo "$TERRAFORM_OUTPUTS" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          
-          echo "All Terraform outputs captured"
-
       - name: Update Upgrade Workflow with New Customer
         run: |
           CUSTOMER="${{ github.event.inputs.customer_name }}"
@@ -259,12 +230,6 @@ jobs:
           echo "- **Customer Name:** ${{ github.event.inputs.customer_name }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Domain:** ${{ github.event.inputs.domain_name }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Image ID:** ${{ github.event.inputs.image_id }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          echo "### :gear: Terraform Outputs" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo '${{ steps.terraform_outputs.outputs.terraform_outputs }}' >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           
