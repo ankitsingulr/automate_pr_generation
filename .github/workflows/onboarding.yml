@@ -188,7 +188,7 @@ jobs:
             awk '
               /options:/ { 
                 print; 
-                print "          - \"'"$CUSTOMER"'\"";
+                print "          - '"'"'"$CUSTOMER"'"'"'";
                 next 
               } 
               { print } 
