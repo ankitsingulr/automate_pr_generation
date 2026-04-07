@@ -1,0 +1,6 @@
+customer_name = "ankittest"
+aws_region = "us-east-1"
+image_id = "4567e"
+domain_name = "esrtfg"
+singulr_env = "PROD"
+cert_arn = "sdfgh"
