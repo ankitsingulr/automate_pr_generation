@@ -1,0 +1,6 @@
+customer_name = "opt"
+aws_region = "us-east-1"
+image_id = "r5678o9"
+domain_name = "4567"
+singulr_env = "PROD"
+cert_arn = "e54678"
