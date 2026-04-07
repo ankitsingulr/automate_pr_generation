@@ -206,20 +206,28 @@ jobs:
 
       - name: Update Upgrade Workflow with New Customer
         run: |
-          # Add new customer to upgrade workflow options
+          CUSTOMER="${{ github.event.inputs.customer_name }}"
+          
           UPGRADE_WORKFLOW=".github/workflows/upgrade_customer_with_image_tag.yaml"
-          
-          # Use awk to add the new customer to the options list
-          awk '
-            /options:/ { 
-              print; 
-              print "          - \"'${{ github.event.inputs.customer_name }}'\"";
-              next 
-            } 
-            { print } 
-          ' "$UPGRADE_WORKFLOW" > "$UPGRADE_WORKFLOW.tmp" && mv "$UPGRADE_WORKFLOW.tmp" "$UPGRADE_WORKFLOW"
-          
-          echo "Added ${{ github.event.inputs.customer_name }} to upgrade workflow options"
+          ROLLBACK_WORKFLOW=".github/workflows/upgrade_ui.yml"  # second workflow
+      
+          # Function to add customer to workflow options
+          add_customer_to_workflow() {
+            local workflow=$1
+            awk '
+              /options:/ { 
+                print; 
+                print "          - \"'"$CUSTOMER"'\"";
+                next 
+              } 
+              { print } 
+            ' "$workflow" > "$workflow.tmp" && mv "$workflow.tmp" "$workflow"
+            echo "Added $CUSTOMER to $workflow"
+          }
+      
+          # Update both workflows
+          add_customer_to_workflow "$UPGRADE_WORKFLOW"
+          add_customer_to_workflow "$ROLLBACK_WORKFLOW"
 
       - name: Create feature branch
         id: create_branch
