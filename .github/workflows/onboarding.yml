@@ -29,8 +29,8 @@ on:
         type: choice
         options:
           - 
-          - m5.2xlarge
-          - m5.4xlarge
+          - "m5.2xlarge"
+          - 'm5.4xlarge'
       singulr_graph_instance_type:
         description: "Singulr graph instance type"
         required: false
