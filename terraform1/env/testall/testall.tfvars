@@ -1,0 +1,6 @@
+customer_name = "testall"
+aws_region = "us-east-1"
+image_id = "fgyuh"
+domain_name = "gvgeuywd"
+singulr_env = "PROD"
+cert_arn = "getwyudh"
