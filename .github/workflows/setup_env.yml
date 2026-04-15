@@ -32,7 +32,7 @@ jobs:
              | select(length > 0 and (startswith("#") | not))
              | split("=")
              | { key: .[0], value: (.[1:] | join("=")) }
-             | select(.value | test("\\$\\{") | not)   # ❗ skip ${...}
+             | select(.value | test("\\$\\{") | not) 
             ]
             | from_entries
           ' < terraform1/test.env.tfpl)
