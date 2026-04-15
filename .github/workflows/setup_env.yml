@@ -24,6 +24,7 @@ jobs:
 
       - name: Sync .env with AWS Secrets Manager
         env:
+          ENV_FILE_PATH: terraform1/test.env.tfpl
           SECRET_NAME: test_env_upgrade
         run: |
           # Convert .env to JSON
@@ -35,7 +36,7 @@ jobs:
              | select(.value | test("\\$\\{") | not) 
             ]
             | from_entries
-          ' < terraform1/test.env.tfpl)
+          ' < $ENV_FILE_PATH)
           echo "Local ENV JSON:"
           echo "$ENV_JSON"
 
