@@ -27,8 +27,15 @@ jobs:
           SECRET_NAME: test_env_upgrade
         run: |
           # Convert .env to JSON
-          ENV_JSON=$(cat terraform1/test.env | grep -v '^#' | grep -v '^$' | awk -F '=' '{print "\"" $1 "\": \"" $2 "\""}' | jq -s 'add')
-
+          ENV_JSON=$(jq -Rn '
+            [inputs
+             | select(length > 0 and (startswith("#") | not))
+             | split("=")
+             | { key: .[0], value: (.[1:] | join("=")) }
+             | select(.value | test("\\$\\{") | not)   # ❗ skip ${...}
+            ]
+            | from_entries
+          ' < .env)
           echo "Local ENV JSON:"
           echo "$ENV_JSON"
 
