@@ -54,13 +54,12 @@ jobs:
           UPDATED_SECRET=$(jq -n \
             --argjson local "$ENV_JSON" \
             --argjson remote "$EXISTING_SECRET" '
-              reduce (keys_unsorted[] as $k ({}; .)) as $dummy
-              | $remote + (
-                  $local
-                  | with_entries(
-                      select(.key as $k | ($remote[$k] | not))
-                    )
-                )
+              $remote + (
+                $local
+                | with_entries(
+                    select(.key as $k | ($remote | has($k) | not))
+                  )
+              )
             ')
 
           echo "Updated Secret:"
