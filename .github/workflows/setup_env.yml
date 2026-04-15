@@ -1,0 +1,65 @@
+name: setup env secret
+
+on: 
+  workflow_dispatch:
+    
+jobs:
+  sync-env-to-aws-secrets:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKKEN }}
+          aws-region: us-east-1
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Sync .env with AWS Secrets Manager
+        env:
+          SECRET_NAME: test_env_upgrade
+        run: |
+          # Convert .env to JSON
+          ENV_JSON=$(cat terraform1/test.env | grep -v '^#' | grep -v '^$' | awk -F '=' '{print "\"" $1 "\": \"" $2 "\""}' | jq -s 'add')
+
+          echo "Local ENV JSON:"
+          echo "$ENV_JSON"
+
+          # Get existing secret (if exists)
+          EXISTING_SECRET=$(aws secretsmanager get-secret-value \
+            --secret-id "$SECRET_NAME" \
+            --query SecretString \
+            --output text 2>/dev/null || echo "{}")
+
+          echo "Existing AWS Secret:"
+          echo "$EXISTING_SECRET"
+
+          # Merge logic:
+          # - Add keys that don't exist
+          # - Keep existing values if key already exists
+          UPDATED_SECRET=$(jq -n \
+            --argjson local "$ENV_JSON" \
+            --argjson remote "$EXISTING_SECRET" '
+              reduce (keys_unsorted[] as $k ({}; .)) as $dummy
+              | $remote + (
+                  $local
+                  | with_entries(
+                      select(.key as $k | ($remote[$k] | not))
+                    )
+                )
+            ')
+
+          echo "Updated Secret:"
+          echo "$UPDATED_SECRET"
+
+          # Update secret in AWS
+          aws secretsmanager put-secret-value \
+            --secret-id "$SECRET_NAME" \
+            --secret-string "$UPDATED_SECRET"
