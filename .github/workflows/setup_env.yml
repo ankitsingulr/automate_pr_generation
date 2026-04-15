@@ -35,7 +35,7 @@ jobs:
              | select(.value | test("\\$\\{") | not)   # ❗ skip ${...}
             ]
             | from_entries
-          ' < terraform1/test.env)
+          ' < terraform1/test.env.tfpl)
           echo "Local ENV JSON:"
           echo "$ENV_JSON"
 
