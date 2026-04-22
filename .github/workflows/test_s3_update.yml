@@ -14,6 +14,9 @@ on:
       image_tag:
         description: 'Docker image tag to upgrade ex: 0.9.0-8eb15e1-20240814111632'
         required: true
+      release_tag:
+        description: "The release tag created by this workflow"
+        type: string
 
 jobs:
   Update-s3-config:
@@ -65,3 +68,94 @@ jobs:
         aws s3 cp $LOCAL_FILE s3://$BUCKET/$KEY
 
         echo "✅ Done"
+
+  Update-s3-RC-build:
+      runs-on: ubuntu-latest
+      env:
+        S3_RELEASE_BUCKET: "singulr-ai-internal-bucket"
+        S3_RELEASE_FILE_PATH: "ci-cd/releases.txt"
+        S3_IMAGE_BUCKET: "docs.singulr.ai"
+        S3_IMAGE_FILE_PATH: "Customer_details/latest_rc_image.txt"
+        RELEASE_TAG: ${{ github.event.inputs.release_tag }}
+        BRANCH_NAME: ${{ github.ref_name }}
+      steps:
+        - name: Configure AWS credentials
+          uses: aws-actions/configure-aws-credentials@v4
+          with:
+              aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+              aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+              aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+              aws-region: us-east-1
+
+        - name: Update S3 RC build
+          run: |
+            set -x
+            LOCAL_RELEASE_FILE="releases.txt"
+            LOCAL_IMAGE_FILE="latest_rc_image.txt"
+
+            # Download releases.txt from S3 (ignore error if not found)
+            echo "Downloading existing releases file from S3..."
+            if aws s3 cp "s3://$S3_RELEASE_BUCKET/$S3_RELEASE_FILE_PATH" $LOCAL_RELEASE_FILE; then
+              echo "Successfully downloaded releases.txt"
+              echo "File contents:"
+              cat $LOCAL_RELEASE_FILE
+            else
+              echo "Releases file not found, creating new one"
+              touch $LOCAL_RELEASE_FILE
+            fi
+
+            # Get the last release entry and extract branch name
+            LAST_RELEASE_LINE=$(tail -n 1 $LOCAL_RELEASE_FILE || echo "")
+            echo "Last release line: '$LAST_RELEASE_LINE'"
+            
+            # Extract branch name from format "TIMESTAMP - BRANCH_NAME"
+            if [ -n "$LAST_RELEASE_LINE" ]; then
+              LAST_RELEASE_BRANCH=$(echo "$LAST_RELEASE_LINE" | sed 's/.* - //' | tr -d '\r\n')
+              echo "Extracted last release branch: '$LAST_RELEASE_BRANCH'"
+            fi
+            
+            echo "Current branch name: '$BRANCH_NAME'"
+            echo "Last release branch: '$LAST_RELEASE_BRANCH'"
+            
+            # Compare branch names
+            if [ "$BRANCH_NAME" != "$LAST_RELEASE_BRANCH" ]; then
+              echo "VALIDATION FAILED: Branch name '$BRANCH_NAME' does not match last release branch '$LAST_RELEASE_BRANCH'"
+              echo "This build is not authorized to update RC build"
+              exit 1
+            else
+              echo "VALIDATION PASSED: Branch name matches last release branch"
+            fi
+            
+            # Download existing image file if it exists
+            echo "Downloading existing image file..."
+            if aws s3 cp "s3://$S3_IMAGE_BUCKET/$S3_IMAGE_FILE_PATH" $LOCAL_IMAGE_FILE; then
+              echo "Existing image file found:"
+              cat $LOCAL_IMAGE_FILE
+            else
+              echo "Image file not found, creating new one"
+              touch $LOCAL_IMAGE_FILE
+            fi
+            
+            # Create new image tag entry
+            TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+            NEW_IMAGE_TAG="$TIMESTAMP - $RELEASE_TAG"
+            echo "Creating new image tag: '$NEW_IMAGE_TAG'"
+            
+            # Add new entry to image file
+            echo "" >> "$LOCAL_IMAGE_FILE"
+            echo "$NEW_IMAGE_TAG" >> $LOCAL_IMAGE_FILE
+            
+            echo "Updated image file contents:"
+            cat $LOCAL_IMAGE_FILE
+            
+            # Upload updated image file to S3
+            echo "Uploading updated image file to S3..."
+            if aws s3 cp $LOCAL_IMAGE_FILE "s3://$S3_IMAGE_BUCKET/$S3_IMAGE_FILE_PATH"; then
+              echo "Successfully uploaded image file to S3"
+            else
+              echo "ERROR: Failed to upload image file to S3"
+              exit 1
+            fi
+            
+            echo "✅ New image tag: $NEW_IMAGE_TAG"
+            echo "s3 location: s3://$S3_IMAGE_BUCKET/$S3_IMAGE_FILE_PATH"
