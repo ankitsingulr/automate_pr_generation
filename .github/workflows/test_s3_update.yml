@@ -33,33 +33,43 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y jq
 
-    - name: Update S3 metadata
-      env: 
+    - name: Update S3 JSON config
+      env:
         BUCKET: "docs.singulr.ai"
         ENV: ${{ github.event.inputs.environment }}
         KEY: "Customer_details/${{ github.event.inputs.environment }}.json"
         IMAGE_TAG: ${{ github.event.inputs.image_tag }}
-      run: | 
-        echo "Checking if file exists..."
-        if ! aws s3api head-object --bucket "$BUCKET" --key "$KEY" >/dev/null 2>&1; then
-          echo "File $KEY does not exist. Creating new file..."
-          echo '{"CUSTOMER": "'"$ENV"'", "IMAGE_ID": "'"$IMAGE_TAG"'"}' | aws s3 cp - s3://$BUCKET/$KEY
-          echo "Created new customer file with initial metadata"
+      run: |
+        set -euo pipefail
+        LOCAL_FILE="config.json"
+
+        echo "Checking if file exists in S3..."
+
+        if aws s3api head-object --bucket "$BUCKET" --key "$KEY" >/dev/null 2>&1; then
+        echo "File exists → downloading"
+        aws s3 cp s3://$BUCKET/$KEY $LOCAL_FILE
         else
-          echo "Fetching existing metadata..."
-          metadata=$(aws s3api head-object \
-            --bucket "$BUCKET" \
-            --key "$KEY" \
-            --query Metadata \
-            --output json 2>/dev/null || echo '{}')
-          echo "Current metadata: $metadata"
-          echo "Updating image tag..."
-          updated=$(echo "$metadata" | jq --arg tag "$IMAGE_TAG" '.IMAGE_ID=$tag')
-          meta_string=$(echo "$updated" | jq -r 'to_entries | map("\(.key)=\(.value)") | join(",")')
-          echo "Final metadata: $meta_string"
-          aws s3 cp \
-            s3://$BUCKET/$KEY \
-            s3://$BUCKET/$KEY \
-            --metadata "$meta_string" \
-            --metadata-directive REPLACE
+        echo "File does not exist → creating new JSON"
+        echo '{}' > $LOCAL_FILE
         fi
+
+        echo "Updating JSON..."
+
+        updated=$(jq 
+        --arg env "$ENV" 
+        --arg tag "$IMAGE_TAG" 
+        '
+        .CUSTOMER = ($env // .CUSTOMER) |
+        .IMAGE_ID = $tag
+        ' 
+        $LOCAL_FILE)
+
+        echo "$updated" > $LOCAL_FILE
+
+        echo "Final JSON:"
+        cat $LOCAL_FILE
+
+        echo "Uploading back to S3..."
+        aws s3 cp $LOCAL_FILE s3://$BUCKET/$KEY
+
+        echo "✅ Done"
