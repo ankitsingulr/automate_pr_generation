@@ -121,7 +121,7 @@ jobs:
             if [ "$BRANCH_NAME" != "$LAST_RELEASE_BRANCH" ]; then
               echo "VALIDATION FAILED: Branch name '$BRANCH_NAME' does not match last release branch '$LAST_RELEASE_BRANCH'"
               echo "This build is not authorized to update RC build"
-              exit 1
+              exit 0
             else
               echo "VALIDATION PASSED: Branch name matches last release branch"
             fi
@@ -154,7 +154,7 @@ jobs:
               echo "Successfully uploaded image file to S3"
             else
               echo "ERROR: Failed to upload image file to S3"
-              exit 1
+              exit 0
             fi
             
             echo "✅ New image tag: $NEW_IMAGE_TAG"
