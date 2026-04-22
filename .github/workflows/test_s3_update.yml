@@ -55,16 +55,12 @@ jobs:
 
         echo "Updating JSON..."
 
-        updated=$(jq 
-        --arg env "$ENV" 
-        --arg tag "$IMAGE_TAG" 
-        '
-        .CUSTOMER = ($env // .CUSTOMER) |
-        .IMAGE_ID = $tag
-        ' 
-        $LOCAL_FILE)
-
-        echo "$updated" > $LOCAL_FILE
+        updated=$(jq
+        --arg env "$ENV"
+        --arg tag "$IMAGE_TAG"
+        '.CUSTOMER = (.CUSTOMER // $env) | .IMAGE_ID = $tag'
+        "$LOCAL_FILE")
+        echo "$updated" > "$LOCAL_FILE"
 
         echo "Final JSON:"
         cat $LOCAL_FILE
