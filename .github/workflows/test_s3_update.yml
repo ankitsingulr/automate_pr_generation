@@ -37,7 +37,7 @@ jobs:
       env: 
         BUCKET: "docs.singulr.ai"
         ENV: ${{ github.event.inputs.environment }}
-        KEY: "Customer_details/${ENV}.json"
+        KEY: "Customer_details/ENV.json"
         IMAGE_TAG: ${{ github.event.inputs.image_tag }}
       run: | 
         echo "Checking if file exists..."
