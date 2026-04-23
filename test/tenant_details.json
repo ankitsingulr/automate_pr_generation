@@ -1,0 +1,37 @@
+{
+    "staging": {
+        "platform": "75b2e3bc-22b7-531f-772c-828ae5a87d22-platform-0.setups.support-tunnel.singulr.ai",
+        "collectors": [],
+        "tenant_id": "00000000-0000-0000-0000-000000000003",
+        "tenant_endpoint": "https://api.staging-app.singulr.ai",
+        "ui": {
+            "bucket": "singulr-staging-ui",
+            "distribution": "EWAKGYW2QX1AP",
+            "descope_project_id": "P2cM1YbxN6jJKyMAUEKCDjOn1NUo"
+        }
+    },
+    "dev": {
+        "platform": "692b3b78-0728-b60d-5bb6-bbf986043590-platform-0.setups.support-tunnel.singulr.ai",
+        "collectors": ["ankit2","vydvy"],
+        "tenant_id": "00000000-0000-0000-0000-000000000004",
+        "tenant_endpoint": "https://api.dev-app.singulr.ai",
+        "ui": {
+            "bucket": "singulr-dev-ui",
+            "distribution": "E10AL09Y7LSZ6B",
+            "descope_project_id": "P30oytccjtAOXgrLZbyeggV2LAKq"
+        }
+    },
+    "demo": {
+        "platform": "2e62f135-68d6-21ac-876f-761883919817.setups.support-tunnel.singulr.ai",
+        "collectors": [
+            "db266e52-fc54-43f9-8b7a-0ec029653fde.setups.support-tunnel.singulr.ai"
+        ],
+        "tenant_id": "00000000-0000-0000-0000-000000000000",
+        "tenant_endpoint": "https://api.demo.singulr.mobi",
+        "ui": {
+            "bucket": "singulr-ui-0.1.0-0.9.0-fe36750-20240419100557",
+            "distribution": "E1ZSRIVFK2HPJ",
+            "descope_project_id": "P2cPFuENCVcDZjt8XFbL0q8Bvxe4"
+        }
+    },
+}
