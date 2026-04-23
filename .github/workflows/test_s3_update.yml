@@ -127,23 +127,11 @@ jobs:
               echo "VALIDATION PASSED: Branch name matches last release branch"
             fi
             
-            # Download existing image file if it exists
-            echo "Downloading existing image file..."
-            if aws s3 cp "s3://$S3_IMAGE_BUCKET/$S3_IMAGE_FILE_PATH" $LOCAL_IMAGE_FILE; then
-              echo "Existing image file found:"
-              cat $LOCAL_IMAGE_FILE
-            else
-              echo "Image file not found, creating new one"
-              touch $LOCAL_IMAGE_FILE
-            fi
-            
             # Create new image tag entry
             TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
             NEW_IMAGE_TAG="$TIMESTAMP - $RELEASE_TAG"
             echo "Creating new image tag: '$NEW_IMAGE_TAG'"
             
-            # Add new entry to image file
-            echo "" >> "$LOCAL_IMAGE_FILE"
             echo "$NEW_IMAGE_TAG" >> $LOCAL_IMAGE_FILE
             
             echo "Updated image file contents:"
