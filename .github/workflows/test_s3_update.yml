@@ -38,34 +38,35 @@ jobs:
 
     - name: Update S3 JSON config
       env:
-        BUCKET: "docs.singulr.ai"
+        BUCKET: "singulr-ai-internal-bucket"
+        KEY: "Customer_details/image_id.json"
         ENV: ${{ github.event.inputs.environment }}
-        KEY: "Customer_details/${{ github.event.inputs.environment }}.json"
         IMAGE_TAG: ${{ github.event.inputs.image_tag }}
       run: |
         set -euo pipefail
-        LOCAL_FILE="config.json"
+        LOCAL_FILE="image_id.json"
 
         echo "Checking if file exists in S3..."
 
         if aws s3api head-object --bucket "$BUCKET" --key "$KEY" >/dev/null 2>&1; then
-        echo "File exists → downloading"
-        aws s3 cp s3://$BUCKET/$KEY $LOCAL_FILE
+          echo "File exists → downloading"
+          aws s3 cp "s3://$BUCKET/$KEY" "$LOCAL_FILE"
         else
-        echo "File does not exist → creating new JSON"
-        echo '{}' > $LOCAL_FILE
+          echo "File does not exist → creating new JSON"
+          echo '{}' > "$LOCAL_FILE"
         fi
 
-        echo "Updating JSON..."
+        echo "Updating image_id for environment: $ENV"
 
-        updated=$(jq --arg env "$ENV" --arg tag "$IMAGE_TAG" '.CUSTOMER = (.CUSTOMER // $env) | .IMAGE_ID = $tag' "$LOCAL_FILE")
+        updated=$(jq --arg env "$ENV" --arg tag "$IMAGE_TAG" \
+          '.[$env].image_id = $tag' "$LOCAL_FILE")
         echo "$updated" > "$LOCAL_FILE"
 
         echo "Final JSON:"
-        cat $LOCAL_FILE
+        cat "$LOCAL_FILE"
 
         echo "Uploading back to S3..."
-        aws s3 cp $LOCAL_FILE s3://$BUCKET/$KEY
+        aws s3 cp "$LOCAL_FILE" "s3://$BUCKET/$KEY"
 
         echo "✅ Done"
 
