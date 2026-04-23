@@ -29,6 +29,9 @@ jobs:
           set -euo pipefail
   
           INPUT_FILE="test/tenant_details.json"
+
+          # Fix trailing commas
+          sed -i 's/,\s*}/}/g; s/,\s*\]/]/g' "$INPUT_FILE"
   
           echo "Processing tenant_details.json..."
   
