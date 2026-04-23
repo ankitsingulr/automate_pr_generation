@@ -1,0 +1,48 @@
+name: update tenant
+on: 
+  workflow_dispatch: 
+
+jobs:
+  update-tenant:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Process tenant_details and upload to S3
+        env:
+          BUCKET: "singulr-ai-internal-bucket"
+        run: |
+          set -euo pipefail
+  
+          INPUT_FILE="test/tenant_details.json"
+  
+          echo "Processing tenant_details.json..."
+  
+          # Iterate over each top-level key (tenant name)
+          for TENANT in $(jq -r 'keys[]' "$INPUT_FILE"); do
+            echo "Processing tenant: $TENANT"
+  
+            # Extract and transform fields, then build the output JSON
+            FILTERED=$(jq --arg tenant "$TENANT" '
+              .[$tenant] as $v |
+              {}
+              | if $v.platform then .PLATFORM_DEP_ID = ($v.platform | split(".")[0]) else . end
+              | if $v.tenant_id then .TENANT_ID = $v.tenant_id else . end
+              | if $v.tenant_endpoint then .URL = ($v.tenant_endpoint | gsub("api\\."; "")) else . end
+              | if $v.collectors then .COLLECTORS_DEP_IDS = $v.collectors else . end
+              | .CUSTOMER = $tenant
+            ' "$INPUT_FILE")
+  
+            echo "$FILTERED" > "${TENANT}.json"
+  
+            echo "Uploading Customer_details/${TENANT}.json"
+            cat "${TENANT}.json"
+  
+            aws s3 cp "${TENANT}.json" "s3://$BUCKET/Customer_details/${TENANT}.json"
+  
+            rm -f "${TENANT}.json"
+          done
+  
+          echo "✅ Upload complete"
+      
