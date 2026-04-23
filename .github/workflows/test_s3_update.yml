@@ -75,7 +75,7 @@ jobs:
       env:
         S3_RELEASE_BUCKET: "singulr-ai-internal-bucket"
         S3_RELEASE_FILE_PATH: "ci-cd/releases.txt"
-        S3_IMAGE_BUCKET: "docs.singulr.ai"
+        S3_IMAGE_BUCKET: "singulr-ai-internal-bucket"
         S3_IMAGE_FILE_PATH: "Customer_details/latest_rc_image.txt"
         RELEASE_TAG: ${{ github.event.inputs.release_tag }}
         BRANCH_NAME: ${{ github.ref_name }}
