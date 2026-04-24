@@ -28,7 +28,7 @@ jobs:
         run: |
           set -euo pipefail
   
-          INPUT_FILE="deployment/terraform/tenant_details.json"
+          INPUT_FILE="test/tenant_details.json"
           OUTPUT_FILE="tenant_detail.json"
           S3_KEY="Customer_details/tenant_detail.json"
   
