@@ -28,34 +28,32 @@ jobs:
         run: |
           set -euo pipefail
   
-          INPUT_FILE="test/tenant_details.json"
+          INPUT_FILE="deployment/terraform/tenant_details.json"
+          OUTPUT_FILE="tenant_detail.json"
+          S3_KEY="Customer_details/tenant_detail.json"
   
-          echo "Processing tenant_details.json..."
+          echo "Building ${OUTPUT_FILE} from tenant_details.json (one object per tenant key)..."
   
-          # Iterate over each top-level key (tenant name)
-          for TENANT in $(jq -r 'keys[]' "$INPUT_FILE"); do
-            echo "Processing tenant: $TENANT"
+          jq '
+            with_entries(
+              .key as $tenant |
+              .value as $v |
+              .value = (
+                {}
+                | if $v.platform then .PLATFORM_DEP_ID = $v.platform else . end
+                | if $v.tenant_id then .TENANT_ID = $v.tenant_id else . end
+                | if $v.domain then .URL = $v.domain else . end
+                | if $v.user then .USER = $v.user else . end
+                | if $v.collectors then .COLLECTORS_DEP_IDS = $v.collectors else . end
+                | .CUSTOMER = $tenant
+              )
+            )
+          ' "$INPUT_FILE" > "$OUTPUT_FILE"
   
-            # Extract and transform fields, then build the output JSON
-            FILTERED=$(jq --arg tenant "$TENANT" '
-              .[$tenant] as $v |
-              {}
-              | if $v.platform then .PLATFORM_DEP_ID = ($v.platform | split(".")[0]) else . end
-              | if $v.tenant_id then .TENANT_ID = $v.tenant_id else . end
-              | if $v.tenant_endpoint then .URL = ($v.tenant_endpoint | gsub("api\\."; "")) else . end
-              | if $v.collectors then .COLLECTORS_DEP_IDS = $v.collectors else . end
-              | .CUSTOMER = $tenant
-            ' "$INPUT_FILE")
+          echo "Uploading s3://${BUCKET}/${S3_KEY}"
+          cat "$OUTPUT_FILE"
   
-            echo "$FILTERED" > "${TENANT}.json"
+          aws s3 cp "$OUTPUT_FILE" "s3://${BUCKET}/${S3_KEY}"
   
-            echo "Uploading Customer_details/${TENANT}.json"
-            cat "${TENANT}.json"
-  
-            aws s3 cp "${TENANT}.json" "s3://$BUCKET/Customer_details/${TENANT}.json"
-  
-            rm -f "${TENANT}.json"
-          done
-  
+          rm -f "$OUTPUT_FILE"
           echo "✅ Upload complete"
-      
