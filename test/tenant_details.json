@@ -5,7 +5,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000000003",
         "tenant_endpoint": "https://api.staging-app.singulr.ai",
         "user": "support-all@singulr.ai",
-        "domain": "staging-app.singulr.ai",
+        "domain": "https://staging-app.singulr.ai",
         "ui": {
             "bucket": "singulr-staging-ui",
             "distribution": "EWAKGYW2QX1AP",
@@ -18,7 +18,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000000004",
         "tenant_endpoint": "https://api.dev-app.singulr.ai",
         "user": "support-all@singulr.ai",
-        "domain": "dev-app.singulr.ai",
+        "domain": "https://dev-app.singulr.ai",
         "ui": {
             "bucket": "singulr-dev-ui",
             "distribution": "E10AL09Y7LSZ6B",
@@ -33,7 +33,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000000000",
         "tenant_endpoint": "https://api.demo.singulr.mobi",
         "user": "support-all@singulr.ai",
-        "domain": "demo.singulr.mobi",
+        "domain": "https://demo.singulr.mobi",
         "ui": {
             "bucket": "singulr-ui-0.1.0-0.9.0-fe36750-20240419100557",
             "distribution": "E1ZSRIVFK2HPJ",
@@ -46,7 +46,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000000005",
         "tenant_endpoint": "https://api.qa.singulr.ai",
         "user": "support-all@singulr.ai",
-        "domain": "qa.singulr.ai",
+        "domain": "https://qa.singulr.ai",
         "ui": {
             "bucket": "singulr-qa-ui",
             "distribution": "E10HXAJWJSUAOW",
@@ -61,7 +61,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000000000",
         "tenant_endpoint": "https://api.magicleap.singulr.ai",
         "user": "support-magicleap@singulr.ai",
-        "domain": "magicleap.singulr.ai",
+        "domain": "https://magicleap.singulr.ai",
         "ui": {
             "bucket": "singulr-magicleap-ui",
             "distribution": "ETQ9IT81E50PB",
@@ -72,7 +72,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000001002",
         "tenant_endpoint": "https://api.vanguard.singulr.ai.esfe.c1.vanguard.com",
         "user": "support-all@singulr.ai",
-        "domain": "vanguard.singulr.ai.esfe.c1.vanguard.com",
+        "domain": "https://vanguard.singulr.ai.esfe.c1.vanguard.com",
         "ui": {
             "bucket": "singulr-vanguard-ai",
             "distribution": "E2YNRUJKK71XWN",
@@ -88,7 +88,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002001",
         "tenant_endpoint": "https://api.ringcentral.singulr.ai",
         "user": "support-ringcentral@singulr.ai",
-        "domain": "ringcentral.singulr.ai",
+        "domain": "https://ringcentral.singulr.ai",
         "ui": {
             "bucket": "singulr-ringcentral-ui",
             "distribution": "E7BO7F03Z5BB7",
@@ -103,7 +103,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002003",
         "tenant_endpoint": "https://api.wwt.singulr.ai",
         "user": "support-wwt@singulr.ai",
-        "domain": "wwt.singulr.ai",
+        "domain": "https://wwt.singulr.ai",
         "ui": {
             "bucket": "singulr-wwt-ui",
             "distribution": "E3AMMFHMSPL86J",
@@ -118,7 +118,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002005",
         "tenant_endpoint": "https://api.deltadental.singulr.ai",
         "user": "support-deltadental@singulr.ai",
-        "domain": "deltadental.singulr.ai",
+        "domain": "https://deltadental.singulr.ai",
         "ui": {
             "bucket": "singulr-deltadental-ui",
             "distribution": "EHLTY9H740M98",
@@ -136,7 +136,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002004",
         "tenant_endpoint": "https://api.gartner.singulr.ai",
         "user": "support-gartner@singulr.ai",
-        "domain": "gartner.singulr.ai",
+        "domain": "https://gartner.singulr.ai",
         "ui": {
             "bucket": "singulr-gartner-ui",
             "distribution": "E1GVNJW1TT2O5C",
@@ -149,7 +149,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002007",
         "tenant_endpoint": "https://api.kvc.singulr.ai",
         "user": "support-kvc@singulr.ai",
-        "domain": "kvc.singulr.ai",
+        "domain": "https://kvc.singulr.ai",
         "ui": {
             "bucket": "singulr-kvc-ui",
             "distribution": "E3H7FG4ZF949WK",
@@ -160,7 +160,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002008",
         "tenant_endpoint": "https://api.safeharbor.singulr.ai",
         "user": "support-safeharbor@singulr.ai",
-        "domain": "safeharbor.singulr.ai",
+        "domain": "https://safeharbor.singulr.ai",
         "ui": {
             "bucket": "singulr-safeharbor-ui",
             "distribution": "E118ZE8HPBZUWB",
@@ -175,7 +175,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002009",
         "tenant_endpoint": "https://api.trace3.singulr.ai",
         "user": "support-trace@singulr.ai",
-        "domain": "trace3.singulr.ai",
+        "domain": "https://trace3.singulr.ai",
         "ui": {
             "bucket": "singulr-trace3-ui",
             "distribution": "E2J94EA6QV1EDX",
@@ -188,7 +188,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002010",
         "tenant_endpoint": "https://api.netscout.singulr.ai",
         "user": "support-netscout@singulr.ai",
-        "domain": "netscout.singulr.ai",
+        "domain": "https://netscout.singulr.ai",
         "ui": {
             "bucket": "singulr-netscout-ui",
             "distribution": "E2TVQMZ5VJPO5H",
@@ -201,7 +201,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002011",
         "tenant_endpoint": "https://api.halock.singulr.ai",
         "user": "support-halock@singulr.ai",
-        "domain": "halock.singulr.ai",
+        "domain": "https://halock.singulr.ai",
         "ui": {
             "bucket": "singulr-halock-ui",
             "distribution": "E3N95CYG16YEW8",
@@ -214,7 +214,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002012",
         "tenant_endpoint": "https://api.nisa.singulr.ai",
         "user": "support-nisa@singulr.ai",
-        "domain": "nisa.singulr.ai",
+        "domain": "https://nisa.singulr.ai",
         "ui": {
             "bucket": "singulr-nisa-ui",
             "distribution": "E2E6CMNEVQTGZ1",
@@ -225,7 +225,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002013",
         "tenant_endpoint": "https://api.abrh.singulr.ai",
         "user": "support-abrh@singulr.ai",
-        "domain": "abrh.singulr.ai",
+        "domain": "https://abrh.singulr.ai",
         "ui": {
             "bucket": "singulr-ui-abarcahealth-d09e49ac-1f74-8755-8be2-5cc636b2039f",
             "distribution": "E142W0SYGH19Z3",
@@ -236,11 +236,22 @@
         "tenant_id": "00000000-0000-0000-0000-000000002014",
         "tenant_endpoint": "https://api.sn.singulr.ai",
         "user": "support-all@singulr.ai",
-        "domain": "sn.singulr.ai",
+        "domain": "https://sn.singulr.ai",
         "ui": {
             "bucket": "singulr-ui-snprod-33c61c6f-d9ef-fc03-364b-10d8b00eafb8",
             "distribution": "E18TVJNUVPFDVC",
             "descope_project_id": "P32uayTkFIWTGTJ5JHuBsARij4Kc"
+        }
+    },
+    "ibmdemo": {
+        "tenant_id": "00000000-0000-0000-0000-000000000008",
+        "tenant_endpoint": "https://api.at.singulr.ai",
+        "user": "support-all@singulr.ai",
+        "domain": "https://at.singulr.ai",
+        "ui": {
+            "bucket": "singulr-ui-ibmdemo-cbaaf213-01a9-e018-6008-2919ebd9302e",
+            "distribution": "E358ORB78W9XUE",
+            "descope_project_id": "P33PG56G8CBEsuFyFmlqv2w63MR4"
         }
     },
     "incyte": {
@@ -249,7 +260,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002015",
         "tenant_endpoint": "https://api.incy.singulr.ai",
         "user": "support-incyte@singulr.ai",
-        "domain": "incy.singulr.ai",
+        "domain": "https://incy.singulr.ai",
         "ui": {
             "bucket": "singulr-ui-incyte-c74bb2e4-8c16-5d91-6725-e6514785d2cc",
             "distribution": "E1IB6PEAHP0NS0",
@@ -260,7 +271,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002016",
         "tenant_endpoint": "https://api.spectrum.singulr.ai",
         "user": "support-all@singulr.ai",
-        "domain": "spectrum.singulr.ai",
+        "domain": "https://spectrum.singulr.ai",
         "ui": {
             "bucket": "singulr-ui-spectrum-56e0bf1a-ace8-c8be-9531-20f173d434fb",
             "distribution": "E1M40F5NQB3Z1",
@@ -273,7 +284,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002017",
         "tenant_endpoint": "https://api.jfs.singulr.ai",
         "user": "support-all@singulr.ai",
-        "domain": "jfs.singulr.ai",
+        "domain": "https://jfs.singulr.ai",
         "ui": {
             "bucket": "singulr-ui-jfs-40fadb1f-0ed2-d3e0-c644-34fd6b720315",
             "distribution": "ETOMSAIIT96XT",
@@ -286,7 +297,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002018",
         "tenant_endpoint": "https://api.hpro.singulr.ai",
         "user": "support-all@singulr.ai",
-        "domain": "hpro.singulr.ai",
+        "domain": "https://hpro.singulr.ai",
         "ui": {
             "bucket": "singulr-ui-hivepro-fb7d1e49-01ba-fa94-36c7-362eaa12815b",
             "distribution": "E3MAUXJPQ0H5I7",
@@ -297,7 +308,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002019",
         "tenant_endpoint": "https://api.bn.singulr.ai",
         "user": "support-all@singulr.ai",
-        "domain": "bn.singulr.ai",
+        "domain": "https://bn.singulr.ai",
         "ui": {
             "bucket": "singulr-brookfield-ui",
             "distribution": "E1XHCIO3F3PPRV",
@@ -308,7 +319,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002020",
         "tenant_endpoint": "https://api.spot.singulr.ai",
         "user": "support-all@singulr.ai",
-        "domain": "spot.singulr.ai",
+        "domain": "https://spot.singulr.ai",
         "ui": {
             "bucket": "singulr-ui-spotify-5a7fe6bc-8104-20a0-11df-8a82ee7f1d0b",
             "distribution": "EFN4T8Z2JKPUH",
@@ -323,7 +334,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002021",
         "tenant_endpoint": "https://api.hcg.singulr.ai",
         "user": "support-all@singulr.ai",
-        "domain": "hcg.singulr.ai",
+        "domain": "https://hcg.singulr.ai",
         "ui": {
             "bucket": "singulr-ui-hear-59196144-354c-d348-b0fb-aa15569c1da1",
             "distribution": "E3DK3Z9T3GL6Z4",
@@ -334,7 +345,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000000009",
         "tenant_endpoint": "https://api.bn-demo.singulr.ai",
         "user": "support-all@singulr.ai",
-        "domain": "bn-demo.singulr.ai",
+        "domain": "https://bn-demo.singulr.ai",
         "ui": {
             "bucket": "singulr-ui-bndemo-4e937c5e-399a-3edf-f870-0359c568f079",
             "distribution": "E3T4PG6L4RNH5D",
@@ -349,7 +360,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002022",
         "tenant_endpoint": "https://api.ccu.singulr.ai",
         "user": "support-all@singulr.ai",
-        "domain": "ccu.singulr.ai",
+        "domain": "https://ccu.singulr.ai",
         "ui": {
             "bucket": "singulr-ui-ccu-26543a82-00ed-76cc-f30d-92d46d6cf1ab",
             "distribution": "E5HNSKPLBI3QR",
@@ -364,7 +375,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002023",
         "tenant_endpoint": "https://api.bsca.singulr.ai",
         "user": "support-all@singulr.ai",
-        "domain": "bsca.singulr.ai",
+        "domain": "https://bsca.singulr.ai",
         "ui": {
             "bucket": "singulr-ui-bsca-32f052d1-6e06-f125-6b2a-12ea58f06488",
             "distribution": "E327YJSUKN3CL0",
@@ -379,7 +390,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002024",
         "tenant_endpoint": "https://api.fis.singulr.ai",
         "user": "support-all@singulr.ai",
-        "domain": "fis.singulr.ai",
+        "domain": "https://fis.singulr.ai",
         "ui": {
             "bucket": "singulr-ui-fis-8f0e4210-5a70-5c65-e3b7-27fac639e8a8",
             "distribution": "E32APE6L2NZH6G",
@@ -394,7 +405,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002025",
         "tenant_endpoint": "https://api.nttj.singulr.ai",
         "user": "support-all@singulr.ai",
-        "domain": "nttj.singulr.ai",
+        "domain": "https://nttj.singulr.ai",
         "ui": {
             "bucket": "singulr-ui-nttj-8b266d09-5554-0252-3892-2d9992465edc",
             "distribution": "E2UBYAPO9IQBHC",
@@ -407,7 +418,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002026",
         "tenant_endpoint": "https://api.sbs.singulr.ai",
         "user": "support-all@singulr.ai",
-        "domain": "sbs.singulr.ai",
+        "domain": "https://sbs.singulr.ai",
         "ui": {
             "bucket": "singulr-ui-sbs-d6de9c4b-09cb-a4a5-5761-229aa50e745c",
             "distribution": "E144CCWA6EK9OZ",
@@ -418,7 +429,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000001005",
         "tenant_endpoint": "https://api.vg-beta.singulr.ai.plsp.c1.vanguard.com",
         "user": "support-all@singulr.ai",
-        "domain": "vg-beta.singulr.ai.plsp.c1.vanguard.com",
+        "domain": "https://vg-beta.singulr.ai.plsp.c1.vanguard.com",
         "ui": {
             "bucket": "singulr-vg-beta-ui",
             "distribution": "E1WFM4V5K0KZM6",
@@ -429,7 +440,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000001003",
         "tenant_endpoint": "https://api.vg-stage.singulr.ai.plse.c1.vanguard.com",
         "user": "support-all@singulr.ai",
-        "domain": "vg-stage.singulr.ai.plse.c1.vanguard.com",
+        "domain": "https://vg-stage.singulr.ai.plse.c1.vanguard.com",
         "ui": {
             "bucket": "singulr-vg-stage-ui",
             "distribution": "E2H6YEKU61GG8C",
@@ -440,7 +451,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000001004",
         "tenant_endpoint": "https://api.vg-prod.singulr.ai.plsp.c1.vanguard.com",
         "user": "support-all@singulr.ai",
-        "domain": "vg-prod.singulr.ai.plsp.c1.vanguard.com",
+        "domain": "https://vg-prod.singulr.ai.plsp.c1.vanguard.com",
         "ui": {
             "bucket": "singulr-vg-prod-ui",
             "distribution": "E36705ORUAGEHF",
@@ -455,7 +466,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002027",
         "tenant_endpoint": "https://api.xmtr.singulr.ai",
         "user": "support-all@singulr.ai",
-        "domain": "xmtr.singulr.ai",
+        "domain": "https://xmtr.singulr.ai",
         "ui": {
             "bucket": "singulr-ui-xometry-259c211a-8142-0531-c36e-c6a686b56a91",
             "distribution": "E5SIEQOEG9LYO",
@@ -468,7 +479,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000000008",
         "tenant_endpoint": "https://api.dev-app3.singulr.ai",
         "user": "support-all@singulr.ai",
-        "domain": "dev-app3.singulr.ai",
+        "domain": "https://dev-app3.singulr.ai",
         "ui": {
             "bucket": "singulr-ui-dev-app3-fb12ba88-9e5b-3f04-d71a-50c534f75a09",
             "distribution": "E39BJAQZQ2P1FT",
@@ -481,7 +492,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000000009",
         "tenant_endpoint": "https://api.dev-app4.singulr.ai",
         "user": "support-all@singulr.ai",
-        "domain": "dev-app4.singulr.ai",
+        "domain": "https://dev-app4.singulr.ai",
         "ui": {
             "bucket": "singulr-ui-dev-app4-e1b91882-0502-5f8c-06ce-785f814a3b86",
             "distribution": "E1KBS08INB41WJ",
@@ -496,7 +507,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000000010",
         "tenant_endpoint": "https://api.vg-sandbox.singulr.ai",
         "user": "support-all@singulr.ai",
-        "domain": "vg-sandbox.singulr.ai",
+        "domain": "https://vg-sandbox.singulr.ai",
         "ui": {
             "bucket": "singulr-ui-vg-sandbox-b241ed76-0fbf-f7f3-90a1-795330990ce4",
             "distribution": "E3NXBAN6E9V8GC",
@@ -509,7 +520,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002028",
         "tenant_endpoint": "https://api.sc.singulr.ai",
         "user": "support-all@singulr.ai",
-        "domain": "sc.singulr.ai",
+        "domain": "https://sc.singulr.ai",
         "ui": {
             "bucket": "singulr-ui-southern-4ea94230-610b-7d10-077b-077783503aad",
             "distribution": "E4D5R3M4RF169",
@@ -522,7 +533,7 @@
         "tenant_id": "00000000-0000-0000-0000-000000002029",
         "tenant_endpoint": "https://api.sts.singulr.ai",
         "user": "support-all@singulr.ai",
-        "domain": "sts.singulr.ai",
+        "domain": "https://sts.singulr.ai",
         "ui": {
             "bucket": "singulr-ui-securitas-809bc7e9-295a-964d-75dc-e0edb04d53f1",
             "distribution": "EWSFWHX4ZWR4I",
