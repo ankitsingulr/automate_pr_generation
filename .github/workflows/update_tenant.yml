@@ -29,8 +29,8 @@ jobs:
           set -euo pipefail
   
           INPUT_FILE="test/tenant_details.json"
-          OUTPUT_FILE="tenant_detail.json"
-          S3_KEY="Customer_details/tenant_detail.json"
+          OUTPUT_FILE="env_detail.json"
+          S3_KEY="Customer_details/env_detail.json"
   
           echo "Building ${OUTPUT_FILE} from tenant_details.json (one object per tenant key)..."
   
