@@ -243,17 +243,6 @@
             "descope_project_id": "P32uayTkFIWTGTJ5JHuBsARij4Kc"
         }
     },
-    "ibmdemo": {
-        "tenant_id": "00000000-0000-0000-0000-000000000008",
-        "tenant_endpoint": "https://api.at.singulr.ai",
-        "user": "support-all@singulr.ai",
-        "domain": "at.singulr.ai",
-        "ui": {
-            "bucket": "singulr-ui-ibmdemo-cbaaf213-01a9-e018-6008-2919ebd9302e",
-            "distribution": "E358ORB78W9XUE",
-            "descope_project_id": "P33PG56G8CBEsuFyFmlqv2w63MR4"
-        }
-    },
     "incyte": {
         "platform": "c74bb2e4-8c16-5d91-6725-e6514785d2cc-platform-0.setups.support-tunnel.singulr.ai",
         "collectors": [],
