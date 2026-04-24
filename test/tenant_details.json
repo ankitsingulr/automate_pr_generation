@@ -19,12 +19,5 @@
             "distribution": "E10AL09Y7LSZ6B",
             "descope_project_id": "P30oytccjtAOXgrLZbyeggV2LAKq"
         }
-    },
-    "demo": {
-        "platform": "2e62f135-68d6-21ac-876f-761883919817.setups.support-tunnel.singulr.ai",
-        "collectors": [
-            "db266e52-fc54-43f9-8b7a-0ec029653fde.setups.support-tunnel.singulr.ai"
-        ],
-        "tenant_id": "00000000-0000-0000-0000-000000000000"
     }
 }
