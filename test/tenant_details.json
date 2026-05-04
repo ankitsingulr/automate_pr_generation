@@ -529,7 +529,9 @@
     },
     "securitas": {
         "platform": "809bc7e9-295a-964d-75dc-e0edb04d53f1-platform-0.setups.support-tunnel.singulr.ai",
-        "collectors": ["78058c5e-53fe-4b13-9ce3-edef5c701684.setups.support-tunnel.singulr.ai"],
+        "collectors": [
+            "78058c5e-53fe-4b13-9ce3-edef5c701684.setups.support-tunnel.singulr.ai"
+        ],
         "tenant_id": "00000000-0000-0000-0000-000000002029",
         "tenant_endpoint": "https://api.sts.singulr.ai",
         "user": "support-all@singulr.ai",
@@ -538,6 +540,17 @@
             "bucket": "singulr-ui-securitas-809bc7e9-295a-964d-75dc-e0edb04d53f1",
             "distribution": "EWSFWHX4ZWR4I",
             "descope_project_id": "P3ChlYuUiOAHgtwZS5FOebLsp9XN"
+        }
+    },
+    "ankit-123": {
+        "platform": "test-deployment-123-platform-0.setups.support-tunnel.singulr.ai",
+        "collectors": [],
+        "tenant_id": "00000000-0000-0000-0000-000000000001",
+        "tenant_endpoint": "https://api.ankit.singulr.ai",
+        "ui": {
+            "bucket": "test-bucket-name",
+            "distribution": "E1234567890ABCDEF",
+            "descope_project_id": "test-project-id"
         }
     }
 }

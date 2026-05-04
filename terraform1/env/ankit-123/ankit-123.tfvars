@@ -1,0 +1,5 @@
+customer_name = "ankit-123"
+aws_region = "us-east-1"
+image_id = "12345"
+domain_name = "ankit.singulr.ai"
+singulr_env = "DEV"

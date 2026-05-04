@@ -9,6 +9,7 @@ on:
         default: 'staging'
         type: choice
         options:
+          - '        options:'
           - 'demo'
           - 'staging'
           - 'dev'
