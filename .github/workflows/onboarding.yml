@@ -200,6 +200,56 @@ jobs:
           add_customer_to_workflow "$UPGRADE_WORKFLOW"
           add_customer_to_workflow "$ROLLBACK_WORKFLOW"
 
+      - name: Update Tenant Details
+        id: update-tenant-details
+        run: |
+          cd deployment/terraform/platform
+          
+          # For local testing: uncomment and set manual Terraform outputs
+           TERRAFORM_OUTPUTS='{
+             "deployment_id": "test-deployment-123",
+             "tenant_id": "00000000-0000-0000-0000-000000000001",
+             "cloudfront_distribution_id": "E1234567890ABCDEF",
+             "s3_bucket_name": "test-bucket-name",
+             "project_id": "test-project-id"
+           }'
+          
+          # For production: use actual Terraform outputs
+          # TERRAFORM_OUTPUTS='${{ steps.terraform_outputs.outputs.terraform_outputs }}'
+          
+          DEPLOYMENT_ID=$(echo "$TERRAFORM_OUTPUTS" | jq -r '.deployment_id // ""')
+          PLATFORM="${DEPLOYMENT_ID}-platform-0.setups.support-tunnel.singulr.ai"  # Matches Terraform pattern: "${local.deployment_id_result}-platform-${count.index}.setups.support-tunnel.singulr.ai"
+          COLLECTORS='[]'  # From workflow input, matches var.collector in Terraform
+          TENANT_ID=$(echo "$TERRAFORM_OUTPUTS" | jq -r '.tenant_id // ""')
+          TENANT_ENDPOINT="https://api.${{ github.event.inputs.domain_name }}"  # Matches "https://api.${var.domain_name}" in Terraform
+          CUSTOMER_NAME="${{ github.event.inputs.customer_name }}"  # Matches var.customer_name in Terraform
+          DISTRIBUTION_ID=$(echo "$TERRAFORM_OUTPUTS" | jq -r '.cloudfront_distribution_id // ""')  # Matches aws_cloudfront_distribution.ui_distribution.id
+          BUCKET_NAME=$(echo "$TERRAFORM_OUTPUTS" | jq -r '.s3_bucket_name // ""')  # Matches aws_s3_bucket.ui_bucket.bucket
+          DESCOPPE_PROJECT_ID=$(echo "$TERRAFORM_OUTPUTS" | jq -r '.project_id // ""')  # Matches descope_project.my-project.id
+          
+          echo "Running tenant details update script with:"
+          echo "Platform: $PLATFORM"
+          echo "Collectors: $COLLECTORS"
+          echo "Tenant ID: $TENANT_ID"
+          echo "Tenant Endpoint: $TENANT_ENDPOINT"
+          echo "Customer Name: $CUSTOMER_NAME"
+          echo "Distribution ID: $DISTRIBUTION_ID"
+          echo "Bucket Name: $BUCKET_NAME"
+          echo "Descope Project ID: $DESCOPPE_PROJECT_ID"
+          
+          # Execute the Python script exactly as Terraform data.tf does
+          python3 test/updating_tenant_details_json.py \
+            "$PLATFORM" \
+            "$COLLECTORS" \
+            "$TENANT_ID" \
+            "$TENANT_ENDPOINT" \
+            "$CUSTOMER_NAME" \
+            "$DISTRIBUTION_ID" \
+            "$BUCKET_NAME" \
+            "$DESCOPPE_PROJECT_ID"
+          
+          echo "Tenant details updated successfully"
+
       - name: Create feature branch
         id: create_branch
         run: |
