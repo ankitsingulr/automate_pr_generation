@@ -195,7 +195,6 @@ jobs:
       - name: Update Tenant Details
         id: update-tenant-details
         run: |
-          cd containers
     
           # For local testing: uncomment and set manual Terraform outputs
            TERRAFORM_OUTPUTS='{
