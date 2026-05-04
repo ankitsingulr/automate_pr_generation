@@ -86,14 +86,6 @@ jobs:
         with:
           token: ${{ secrets.PAT_TOKEN }}
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: us-east-1
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -203,8 +195,7 @@ jobs:
       - name: Update Tenant Details
         id: update-tenant-details
         run: |
-          cd deployment/terraform/platform
-          
+    
           # For local testing: uncomment and set manual Terraform outputs
            TERRAFORM_OUTPUTS='{
              "deployment_id": "test-deployment-123",
@@ -238,7 +229,7 @@ jobs:
           echo "Descope Project ID: $DESCOPPE_PROJECT_ID"
           
           # Execute the Python script exactly as Terraform data.tf does
-          python3 test/updating_tenant_details_json.py \
+          python3 updating_json.py \
             "$PLATFORM" \
             "$COLLECTORS" \
             "$TENANT_ID" \
