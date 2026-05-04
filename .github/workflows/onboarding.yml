@@ -231,6 +231,7 @@ jobs:
           # Execute the Python script exactly as Terraform data.tf does
           python3 updating_json.py \
             "$PLATFORM" \
+            "$COLLECTORS" \
             "$TENANT_ID" \
             "$TENANT_ENDPOINT" \
             "$CUSTOMER_NAME" \
