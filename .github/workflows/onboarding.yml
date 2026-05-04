@@ -195,6 +195,7 @@ jobs:
       - name: Update Tenant Details
         id: update-tenant-details
         run: |
+          cd containers
     
           # For local testing: uncomment and set manual Terraform outputs
            TERRAFORM_OUTPUTS='{
@@ -231,7 +232,6 @@ jobs:
           # Execute the Python script exactly as Terraform data.tf does
           python3 updating_json.py \
             "$PLATFORM" \
-            "$COLLECTORS" \
             "$TENANT_ID" \
             "$TENANT_ENDPOINT" \
             "$CUSTOMER_NAME" \
@@ -240,6 +240,13 @@ jobs:
             "$DESCOPPE_PROJECT_ID"
           
           echo "Tenant details updated successfully"
+
+      - name: Deploy UI for Customer
+        run: |
+          yarn install
+          yarn deploy:env "test"
+          
+          echo "UI deployment completed successfully"
 
       - name: Create feature branch
         id: create_branch
