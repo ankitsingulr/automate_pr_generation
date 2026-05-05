@@ -78,6 +78,7 @@ on:
 
 jobs:
   deploy-customer:
+    if: startsWith(github.ref_name, 'singulr-rc-')
     runs-on: ubuntu-latest
 
     steps:
