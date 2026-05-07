@@ -262,8 +262,7 @@ jobs:
               docker image prune -a -f --filter "until=24h"
             '
           done
-       EOF
-            
+          EOF           
             echo "Added deploy job template for $customer to $workflow"
           }
           
