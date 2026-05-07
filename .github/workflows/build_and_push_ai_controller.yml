@@ -1,0 +1,1864 @@
+name: Build, push and deploy ai controller
+
+on:
+  workflow_call:
+    inputs:
+      upgrade_server:
+        description: 'Service to be upgraded'
+        required: true
+        type: string
+        default: 'all'
+      skip_build:
+        description: 'Skip the build process (only deployment)'
+        required: false
+        type: boolean
+        default: false
+      skip_deployment:
+        description: 'Skip the deployment process (only build)'
+        required: false
+        type: boolean
+        default: false
+      release_tag:
+        description: 'Release tag (Required if skip_build is true)'
+        required: false
+        type: string
+        default: ''
+
+  workflow_dispatch:
+    inputs:
+      skip_build:
+        description: 'Skip the build process (only deployment)'
+        required: false
+        type: boolean
+        default: false
+      skip_deployment:
+        description: 'Skip the deployment process (only build)'
+        required: false
+        type: boolean
+        default: false
+      upgrade_server:
+        description: 'Service to be upgraded'
+        required: true
+        type: choice
+        default: 'staging'
+        options:
+          - "rvtg"
+          - "tru"
+          - "sts"
+          - "estc"
+          - 'all'
+          - 'all-customer'
+          - 'staging'
+          - 'qa'
+          - 'dev-ai'
+          - 'demo'
+          - 'gartner'
+          - 'jfshea'
+          - 'ringcentral'
+          - 'magicleap'
+          - 'wwt'
+          - 'deltadental'
+          - 'kvc'
+          - 'trace3'
+          - 'netscout'
+          - 'halock'
+          - 'nisa'
+          - 'incyte'
+          - 'hear'
+          - 'ccu'
+          - 'bsca'
+          - 'fis'
+          - 'nttj'
+          - 'sbs'
+          - 'xmtr'
+          - 'dev-app3'
+          - 'dev-app4'
+      release_tag:
+        description: 'Release tag (Required if skip_build is true)'
+        required: false
+        type: string
+        default: ''
+
+  schedule:
+    - cron: '0 5 * * 1'  # every monday 10:30 IST
+
+jobs:
+  validate-inputs:
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.set_release_tag.outputs.release_tag }}
+      upgrade_server: ${{ steps.set_defaults.outputs.upgrade_server }}
+      skip_build: ${{ steps.set_defaults.outputs.skip_build }}
+      skip_deployment: ${{ steps.set_defaults.outputs.skip_deployment }}
+    steps:
+      - name: Set defaults for scheduled runs
+        id: set_defaults
+        run: |
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            echo "Scheduled run detected - setting defaults for upgrade all"
+            echo "upgrade_server=all" >> $GITHUB_OUTPUT
+            echo "skip_build=false" >> $GITHUB_OUTPUT
+            echo "skip_deployment=false" >> $GITHUB_OUTPUT
+          else
+            echo "Manual or called run - using provided inputs"
+            echo "upgrade_server=${{ inputs.upgrade_server }}" >> $GITHUB_OUTPUT
+            echo "skip_build=${{ inputs.skip_build }}" >> $GITHUB_OUTPUT
+            echo "skip_deployment=${{ inputs.skip_deployment }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Validate inputs
+        id: validate
+        run: |
+          if [[ "${{ steps.set_defaults.outputs.skip_build }}" == "true" && "${{ inputs.release_tag }}" == "" ]]; then
+            echo "Error: release_tag is required when skip_build is true"
+            exit 1
+          fi
+          
+          if [[ "${{ steps.set_defaults.outputs.skip_build }}" == "true" && "${{ steps.set_defaults.outputs.skip_deployment }}" == "true" ]]; then
+            echo "Error: Cannot skip both build and deployment"
+            exit 1
+          fi
+
+      - name: Set release tag
+        id: set_release_tag
+        run: |
+          if [[ "${{ steps.set_defaults.outputs.skip_build }}" == "true" ]]; then
+            echo "Using provided release tag: ${{ inputs.release_tag }}"
+            echo "release_tag=${{ inputs.release_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "Build will generate a release tag"
+            echo "release_tag=to_be_generated" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    needs: validate-inputs
+    if: needs.validate-inputs.outputs.skip_build != true
+    runs-on: high-cpu
+    outputs:
+      release_tag: ${{ steps.create_release_tag.outputs.release_tag }}
+    steps:
+      - name: Clean workspace
+        run: |
+          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
+          sudo rm -rf $GITHUB_WORKSPACE/*
+
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Get branch name and last commit ID
+        id: create_release_tag
+        run: |
+          BRANCH_NAME=$(git branch --show-current)
+          LAST_COMMIT_ID=$(git rev-parse HEAD | cut -c1-7) # Shorten to first 7 characters
+          echo "Branch Name: $BRANCH_NAME"
+          CURRENT_TIME=$(date +%Y%m%d%H%M%S)
+          echo "Last Commit ID: $LAST_COMMIT_ID"
+          RELEASE_TAG="0.9.0-$LAST_COMMIT_ID-$CURRENT_TIME-prod"
+          echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
+          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+          echo '**Release Tag:**' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo $RELEASE_TAG >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        run: aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+
+      - name: Building python protos
+        run: |
+          cd backend/python-services/python-build && bash build.sh $GITHUB_WORKSPACE /home/ubuntu/miniconda3/bin/conda
+          cd $GITHUB_WORKSPACE
+
+      - name: Build and push ai controller service image
+        if: ${{ needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server != 'ocr-service' }}
+        run: |
+          docker build -t singulr-ai-controller-service -f backend/python-services/singulr/ai_platform/deploy/docker/ai-controller-service/Dockerfile .
+          docker tag singulr-ai-controller-service:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/singulr-ai-controller-service:$RELEASE_TAG
+          docker tag singulr-ai-controller-service:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/singulr-ai-controller-service:latest
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/singulr-ai-controller-service:$RELEASE_TAG
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/singulr-ai-controller-service:latest
+
+  sync-deployment-scripts:
+    needs: [validate-inputs]
+    if: always() && needs.validate-inputs.result == 'success'
+    runs-on: high-cpu
+    steps:
+      - name: Set ownership
+        run: |
+          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
+
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Copy scripts folder to S3
+        run: |
+          aws s3 sync backend/python-services/singulr/ai_platform/deploy/scripts s3://singulr-ai-internal-bucket/ai-platform
+
+      - name: Copy infra folder to S3
+        run: |
+          aws s3 sync backend/python-services/singulr/ai_platform/deploy/infra s3://singulr-ai-internal-bucket/ai-platform/infra/
+
+      - name: Copy services folder to S3
+        run: |
+          aws s3 sync backend/python-services/singulr/ai_platform/deploy/services s3://singulr-ai-internal-bucket/ai-platform/services/
+
+  deploy-staging:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.sync-deployment-scripts.result == 'success' && 
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'staging')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "stg-ai-controller"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to staging ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-qa:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.sync-deployment-scripts.result == 'success' &&
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'qa')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "qa-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to qa ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-gartner:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.sync-deployment-scripts.result == 'success' && 
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'gartner')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "gartner-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to gartner ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-dev-ai:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.sync-deployment-scripts.result == 'success' && 
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'dev-ai')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "dev-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to dev-ai ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-demo-ai:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.sync-deployment-scripts.result == 'success' && 
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'demo')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "demo-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to demo-ai ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-ringcentral:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.sync-deployment-scripts.result == 'success' && 
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'ringcentral')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "ringcentral-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to ringcentral ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-jfshea:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.sync-deployment-scripts.result == 'success' && 
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'jfshea')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "jfshea-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to jfshea ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-magicleap:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.sync-deployment-scripts.result == 'success' && 
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'magicleap')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "magicleap-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to magicleap ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-wwt:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.sync-deployment-scripts.result == 'success' && 
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'wwt')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "wwt-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to wwt ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-deltadental:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.sync-deployment-scripts.result == 'success' && 
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'deltadental')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "deltadental-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to deltadental ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-kvc:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.sync-deployment-scripts.result == 'success' && 
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'kvc')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "kvc-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to kvc ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-trace3:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.sync-deployment-scripts.result == 'success' && 
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'trace3')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "trace3-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to trace3 ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-netscout:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.sync-deployment-scripts.result == 'success' && 
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'netscout')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "netscout-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to netscout ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-halock:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.sync-deployment-scripts.result == 'success' && 
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'halock')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "halock-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to halock ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-nisa:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.sync-deployment-scripts.result == 'success' && 
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'nisa')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "nisa-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to nisa ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-incyte:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.sync-deployment-scripts.result == 'success' && 
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'incyte')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "incyte-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to incyte ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-hear:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.sync-deployment-scripts.result == 'success' && 
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'hear')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "hear-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to hear ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-ccu:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.sync-deployment-scripts.result == 'success' && 
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'ccu')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "ccu-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to ccu ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-bsca:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.sync-deployment-scripts.result == 'success' && 
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'bsca')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "bsca-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to bsca ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-fis:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.sync-deployment-scripts.result == 'success' && 
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'fis')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "fis-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to fis ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+  
+  deploy-nttj:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.sync-deployment-scripts.result == 'success' && 
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'nttj')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "nttj-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to nttj ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+  
+  deploy-sbs:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.sync-deployment-scripts.result == 'success' && 
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'sbs')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "sbs-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to sbs ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+  deploy-xmtr:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.sync-deployment-scripts.result == 'success' && 
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'xmtr')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "xmtr-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to xmtr ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-dev-app3:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'dev-app3')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "dev-app3-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to dev-app3 ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-dev-app4:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'dev-app4')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "dev-app4-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to dev-app4 ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-rvtg:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'rvtg')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "rvtg-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to rvtg ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-tru:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'tru')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "tru-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to tru ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+
+  deploy-sts:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'sts')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "sts-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to sts ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-estc:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'estc')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_ZONE: "us-central1-a"
+      RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+      INSTANCE_GROUP: "estc-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Deploy to estc ai-controller
+        run: |
+          set -x
+          echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+          
+          instances=$(gcloud compute instance-groups list-instances \
+            "${{ env.INSTANCE_GROUP }}" \
+            --zone="${{ env.GCP_ZONE }}" \
+            --format="value(instance)" 2>/dev/null || echo "")
+          
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+            exit 0
+          fi
+          
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=${{ env.GCP_ZONE }} \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
