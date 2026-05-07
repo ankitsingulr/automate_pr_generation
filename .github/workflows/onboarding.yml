@@ -126,16 +126,7 @@ jobs:
 
           add_customer_to_workflow "$UPGRADE_WORKFLOW"
 
-          # Add deploy job template (only if not already present).
-          # NOTE on escaping:
-          #  - The heredoc is quoted (<<'EOF') so bash performs NO expansion.
-          #    That keeps $instance / $instances / $(...) literal in the output.
-          #  - GitHub Actions still scans this YAML for ${{ ... }} expressions
-          #    and substitutes them BEFORE bash runs. To emit a literal "${{"
-          #    in the appended file, we use the documented GHA escape:
-          #        ${{ '${{' }}    -> evaluates to the literal text "${{"
-          #  - The customer name is stamped in afterwards via sed using the
-          #    placeholder __CUSTOMER__.
+          
           if grep -q "^  deploy-${CUSTOMER}:" "$UPGRADE_WORKFLOW"; then
             echo "deploy-${CUSTOMER} already present in $UPGRADE_WORKFLOW, skipping append"
           else
