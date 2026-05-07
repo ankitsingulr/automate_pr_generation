@@ -42,6 +42,7 @@ on:
         type: choice
         default: 'staging'
         options:
+          - "ankitgupta"
           - "rvtg"
           - "tru"
           - "sts"
@@ -1855,6 +1856,59 @@ jobs:
             --command='
               echo "Updating BUILD.INFO"
               sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+              echo "Running upgrade services command"
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+              bash /home/ubuntu/start_ai_controller.sh
+              docker image prune -a -f --filter "until=24h"
+            '
+          done
+
+  deploy-ankitgupta:
+    needs: [validate-inputs, build, sync-deployment-scripts]
+    if: |
+      always() && 
+      needs.validate-inputs.result == 'success' && 
+      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+      needs.sync-deployment-scripts.result == 'success' && 
+      needs.validate-inputs.outputs.skip_deployment != true &&
+      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == 'ankitgupta')
+    runs-on: self-hosted
+    env:
+      GCP_PROJECT: "singulr-vertex-ai"
+      GCP_SA_KEY:       GCP_ZONE: "us-central1-a"
+      RELEASE_TAG:       INSTANCE_GROUP: "ankitgupta-ai-controller-instance-group"
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: 
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: 
+      - name: Deploy to ankitgupta ai-controller
+        run: |
+          set -x
+          echo "Deploying to \ instance group"
+
+          instances=$(gcloud compute instance-groups list-instances \
+            "\" \
+            --zone="\" \
+            --format="value(instance)" 2>/dev/null || echo "")
+
+          if [[ -z "$instances" ]]; then
+            echo "No instances found in \ or instance group does not exist, skipping..."
+            exit 0
+          fi
+
+          for instance in $instances; do
+            echo "Upgrading instance: $instance in \"
+            gcloud compute ssh ubuntu@"$instance" \
+            --zone=\ \
+            --command='
+              echo "Updating BUILD.INFO"
+              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=\/" /home/ubuntu/deployment/BUILD.INFO
               echo "Running upgrade services command"
               aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
               aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
