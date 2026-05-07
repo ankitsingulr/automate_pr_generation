@@ -109,6 +109,10 @@ jobs:
 
           add_customer_to_workflow() {
             local workflow=$1
+            if grep -qE "^[[:space:]]+-[[:space:]]+\"${CUSTOMER}\"[[:space:]]*\$" "$workflow"; then
+              echo "$CUSTOMER already present in $workflow options, skipping"
+              return
+            fi
             awk '
               /options:/ {
                 print;
@@ -134,49 +138,48 @@ jobs:
                 always() && 
                 needs.validate-inputs.result == 'success' && 
                 (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
-                needs.sync-deployment-scripts.result == 'success' && 
                 needs.validate-inputs.outputs.skip_deployment != true &&
                 (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == '${CUSTOMER}')
               runs-on: self-hosted
               env:
                 GCP_PROJECT: "singulr-vertex-ai"
-                GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+                GCP_SA_KEY: \${{ secrets.GCP_SA_KEY }}
                 GCP_ZONE: "us-central1-a"
-                RELEASE_TAG: ${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+                RELEASE_TAG: \${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
                 INSTANCE_GROUP: "${CUSTOMER}-ai-controller-instance-group"
               steps:
                 - name: Authenticate to Google Cloud
                   uses: google-github-actions/auth@v1
                   with:
-                    credentials_json: ${{ secrets.GCP_SA_KEY }}
+                    credentials_json: \${{ secrets.GCP_SA_KEY }}
 
                 - name: Set up Google Cloud SDK
                   uses: google-github-actions/setup-gcloud@v1
                   with:
-                    project_id: ${{ env.GCP_PROJECT }}
+                    project_id: \${{ env.GCP_PROJECT }}
 
                 - name: Deploy to ${CUSTOMER} ai-controller
                   run: |
                     set -x
-                    echo "Deploying to ${{ env.INSTANCE_GROUP }} instance group"
+                    echo "Deploying to \${{ env.INSTANCE_GROUP }} instance group"
 
                     instances=\$(gcloud compute instance-groups list-instances \\
-                      "${{ env.INSTANCE_GROUP }}" \
-                      --zone="${{ env.GCP_ZONE }}" \
+                      "\${{ env.INSTANCE_GROUP }}" \\
+                      --zone="\${{ env.GCP_ZONE }}" \\
                       --format="value(instance)" 2>/dev/null || echo "")
 
                     if [[ -z "\$instances" ]]; then
-                      echo "No instances found in ${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+                      echo "No instances found in \${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
                       exit 0
                     fi
 
-                    for instance in $instances; do
-                      echo "Upgrading instance: $instance in ${{ env.INSTANCE_GROUP }}"
-                      gcloud compute ssh ubuntu@"$instance" \
-                      --zone=${{ env.GCP_ZONE }} \
+                    for instance in \$instances; do
+                      echo "Upgrading instance: \$instance in \${{ env.INSTANCE_GROUP }}"
+                      gcloud compute ssh ubuntu@"\$instance" \\
+                      --zone=\${{ env.GCP_ZONE }} \\
                       --command='
                         echo "Updating BUILD.INFO"
-                        sed -i "s/^IMAGE_ID=.*/IMAGE_ID=${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+                        sed -i "s/^IMAGE_ID=.*/IMAGE_ID=\${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
                         echo "Running upgrade services command"
                         aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
                         aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
