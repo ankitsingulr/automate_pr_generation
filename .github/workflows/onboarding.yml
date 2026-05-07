@@ -101,229 +101,95 @@ jobs:
         run: |
           pip install descope
 
-      - name: Create environment folder
-        run: |
-          DIR="terraform1/env/${{ github.event.inputs.customer_name }}"
-          FILE="$DIR/${{ github.event.inputs.customer_name }}.tfvars"
-      
-          mkdir -p "$DIR"
-      
-          echo "customer_name = \"${{ github.event.inputs.customer_name }}\"" > "$FILE"
-          echo "aws_region = \"us-east-1\"" >> "$FILE"
-          echo "image_id = \"${{ github.event.inputs.image_id }}\"" >> "$FILE"
-          echo "domain_name = \"${{ github.event.inputs.domain_name }}\"" >> "$FILE"
-      
-          # Optional values (only added if provided)
-      
-          if [ -n "${{ github.event.inputs.environment }}" ]; then
-            echo "singulr_env = \"${{ github.event.inputs.environment }}\"" >> "$FILE"
-          fi
-      
-          if [ -n "${{ github.event.inputs.platform_count }}" ]; then
-            echo "platform_count = ${{ github.event.inputs.platform_count }}" >> "$FILE"
-          fi
-      
-          if [ -n "${{ github.event.inputs.collector_count }}" ]; then
-            echo "collector_count = ${{ github.event.inputs.collector_count }}" >> "$FILE"
-          fi
-      
-          if [ -n "${{ github.event.inputs.auth_project_id }}" ]; then
-            echo "auth_project_id = \"${{ github.event.inputs.auth_project_id }}\"" >> "$FILE"
-          fi
-      
-          if [ -n "${{ github.event.inputs.singulr_platform_instance_type }}" ]; then
-            echo "singulr_platform_instance_type = \"${{ github.event.inputs.singulr_platform_instance_type }}\"" >> "$FILE"
-          fi
-      
-          if [ -n "${{ github.event.inputs.singulr_graph_instance_type }}" ]; then
-            echo "singulr_graph_instance_type = \"${{ github.event.inputs.singulr_graph_instance_type }}\"" >> "$FILE"
-          fi
-      
-          if [ -n "${{ github.event.inputs.singulr_collector_instance_type }}" ]; then
-            echo "collector_instance_type = \"${{ github.event.inputs.singulr_collector_instance_type }}\"" >> "$FILE"
-          fi
-      
-          if [ -n "${{ github.event.inputs.singulr_psql_instance_type }}" ]; then
-            echo "psql_instance_type = \"${{ github.event.inputs.singulr_psql_instance_type }}\"" >> "$FILE"
-          fi
-      
-          if [ -n "${{ github.event.inputs.tenant_id }}" ]; then
-            echo "default_tenant_id = \"${{ github.event.inputs.tenant_id }}\"" >> "$FILE"
-          fi
-      
-          if [ -n "${{ github.event.inputs.cert_arn }}" ]; then
-            echo "cert_arn = \"${{ github.event.inputs.cert_arn }}\"" >> "$FILE"
-          fi
-      
-          echo "✅ Generated tfvars:"
-          cat "$FILE"
 
-          # Create backend-config.hcl file
-          cat > terraform1/env/${{ github.event.inputs.customer_name }}/backend-config.hcl << EOF
-          backend "s3" {
-            encrypt = true
-            bucket = "singulr-terraform-state"
-            key    = "${{ github.event.inputs.customer_name }}/terraform.tfstate"
-            region = "us-east-1"
-          }
-          EOF
-
-      - name: Update Upgrade Workflow with New Customer
+      - name: Update Upgrade Workflows with New Customer
         run: |
-          CUSTOMER='${{ github.event.inputs.customer_name }}'
-          
-          UPGRADE_WORKFLOW=".github/workflows/upgrade_customer_with_image_tag.yaml"
-          ROLLBACK_WORKFLOW=".github/workflows/upgrade_ui.yml"  # second workflow
-      
-          # Function to add customer to workflow options
+          CUSTOMER="${{ github.event.inputs.customer_name }}"
+
+          UPGRADE_WORKFLOW=".github/workflows/build_and_push_ai_controller.yml"
+
           add_customer_to_workflow() {
             local workflow=$1
             awk '
-              /options:/ { 
-                print; 
-                print "          - '"'"'"$CUSTOMER"'"'"'";
-                next 
-              } 
-              { print } 
+              /options:/ {
+                print;
+                print "          - \"'"$CUSTOMER"'\"";
+                next
+              }
+              { print }
             ' "$workflow" > "$workflow.tmp" && mv "$workflow.tmp" "$workflow"
             echo "Added $CUSTOMER to $workflow"
           }
-      
-          # Update both workflows
+
           add_customer_to_workflow "$UPGRADE_WORKFLOW"
-          add_customer_to_workflow "$ROLLBACK_WORKFLOW"
 
-      - name: Add Deploy Job Template for New Customer
-        run: |
-          CUSTOMER="${{ github.event.inputs.customer_name }}"
-          UPGRADE_WORKFLOW=".github/workflows/build_and_push_ai_controller.yml"
-          
-          # Function to add deploy job template
-          add_deploy_job_template() {
-            local workflow=$1
-            local customer=$2
-            
-            # Create the deploy job template
-            cat >> "$workflow" << EOF
+          # Add deploy job template (only if not already present)
+          if grep -q "^  deploy-${CUSTOMER}:" "$UPGRADE_WORKFLOW"; then
+            echo "deploy-${CUSTOMER} already present in $UPGRADE_WORKFLOW, skipping append"
+          else
+            cat >> "$UPGRADE_WORKFLOW" <<EOF
 
-  deploy-${customer}:
-    needs: [validate-inputs, build, sync-deployment-scripts]
-    if: |
-      always() && 
-      needs.validate-inputs.result == 'success' && 
-      (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
-      needs.sync-deployment-scripts.result == 'success' && 
-      needs.validate-inputs.outputs.skip_deployment != true &&
-      (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == '${customer}')
-    runs-on: self-hosted
-    env:
-      GCP_PROJECT: "singulr-vertex-ai"
-      GCP_SA_KEY: \${{ secrets.GCP_SA_KEY }}
-      GCP_ZONE: "us-central1-a"
-      RELEASE_TAG: \${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
-      INSTANCE_GROUP: "${customer}-ai-controller-instance-group"
-    steps:
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
-        with:
-          credentials_json: \${{ secrets.GCP_SA_KEY }}
+            deploy-${CUSTOMER}:
+              needs: [validate-inputs, build, sync-deployment-scripts]
+              if: |
+                always() && 
+                needs.validate-inputs.result == 'success' && 
+                (needs.build.result == 'success' || needs.validate-inputs.outputs.skip_build == true) &&
+                needs.sync-deployment-scripts.result == 'success' && 
+                needs.validate-inputs.outputs.skip_deployment != true &&
+                (needs.validate-inputs.outputs.upgrade_server == 'all' || needs.validate-inputs.outputs.upgrade_server == 'all-customer' || needs.validate-inputs.outputs.upgrade_server == '${CUSTOMER}')
+              runs-on: self-hosted
+              env:
+                GCP_PROJECT: "singulr-vertex-ai"
+                GCP_SA_KEY: \${{ secrets.GCP_SA_KEY }}
+                GCP_ZONE: "us-central1-a"
+                RELEASE_TAG: \${{ needs.validate-inputs.outputs.skip_build == true && needs.validate-inputs.outputs.release_tag != '' && needs.validate-inputs.outputs.release_tag || needs.build.outputs.release_tag }}
+                INSTANCE_GROUP: "${CUSTOMER}-ai-controller-instance-group"
+              steps:
+                - name: Authenticate to Google Cloud
+                  uses: google-github-actions/auth@v1
+                  with:
+                    credentials_json: \${{ secrets.GCP_SA_KEY }}
 
-      - name: Set up Google Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
-        with:
-          project_id: \${{ env.GCP_PROJECT }}
+                - name: Set up Google Cloud SDK
+                  uses: google-github-actions/setup-gcloud@v1
+                  with:
+                    project_id: \${{ env.GCP_PROJECT }}
 
-      - name: Deploy to ${customer} ai-controller
-        run: |
-          set -x
-          echo "Deploying to \${{ env.INSTANCE_GROUP }} instance group"
-          
-          instances=\$(gcloud compute instance-groups list-instances \\
-            "\${{ env.INSTANCE_GROUP }}" \\
-            --zone="\${{ env.GCP_ZONE }}" \\
-            --format="value(instance)" 2>/dev/null || echo "")
-          
-          if [[ -z "\$instances" ]]; then
-            echo "No instances found in \${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
-            exit 0
+                - name: Deploy to ${CUSTOMER} ai-controller
+                  run: |
+                    set -x
+                    echo "Deploying to \${{ env.INSTANCE_GROUP }} instance group"
+
+                    instances=\$(gcloud compute instance-groups list-instances \\
+                      "\${{ env.INSTANCE_GROUP }}" \\
+                      --zone="\${{ env.GCP_ZONE }}" \\
+                      --format="value(instance)" 2>/dev/null || echo "")
+
+                    if [[ -z "\$instances" ]]; then
+                      echo "No instances found in \${{ env.INSTANCE_GROUP }} or instance group does not exist, skipping..."
+                      exit 0
+                    fi
+
+                    for instance in \$instances; do
+                      echo "Upgrading instance: \$instance in \${{ env.INSTANCE_GROUP }}"
+                      gcloud compute ssh ubuntu@"\$instance" \\
+                      --zone=\${{ env.GCP_ZONE }} \\
+                      --command='
+                        echo "Updating BUILD.INFO"
+                        sed -i "s/^IMAGE_ID=.*/IMAGE_ID=\${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
+                        echo "Running upgrade services command"
+                        aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
+                        aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
+                        bash /home/ubuntu/start_ai_controller.sh
+                        docker image prune -a -f --filter "until=24h"
+                      '
+                    done
+          EOF
+
+            echo "Added deploy job template for $CUSTOMER to $UPGRADE_WORKFLOW"
           fi
-          
-          for instance in \$instances; do
-            echo "Upgrading instance: \$instance in \${{ env.INSTANCE_GROUP }}"
-            gcloud compute ssh ubuntu@"\$instance" \\
-            --zone=\${{ env.GCP_ZONE }} \\
-            --command='
-              echo "Updating BUILD.INFO"
-              sed -i "s/^IMAGE_ID=.*/IMAGE_ID=\${{ env.RELEASE_TAG }}/" /home/ubuntu/deployment/BUILD.INFO
-              echo "Running upgrade services command"
-              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_controller.sh /home/ubuntu/start_ai_controller.sh
-              aws s3 cp s3://singulr-ai-internal-bucket/ai-platform/start_ai_platform_infra.sh /home/ubuntu/start_ai_platform_infra.sh
-              bash /home/ubuntu/start_ai_controller.sh
-              docker image prune -a -f --filter "until=24h"
-            '
-          done
-          EOF           
-            echo "Added deploy job template for $customer to $workflow"
-          }
-          
-          add_deploy_job_template "$UPGRADE_WORKFLOW" "$CUSTOMER"
 
-
-      - name: Update Tenant Details
-        id: update-tenant-details
-        run: |
-    
-          # For local testing: uncomment and set manual Terraform outputs
-           TERRAFORM_OUTPUTS='{
-             "deployment_id": "test-deployment-123",
-             "tenant_id": "00000000-0000-0000-0000-000000000001",
-             "cloudfront_distribution_id": "E1234567890ABCDEF",
-             "s3_bucket_name": "test-bucket-name",
-             "project_id": "test-project-id"
-           }'
-          
-          # For production: use actual Terraform outputs
-          # TERRAFORM_OUTPUTS='${{ steps.terraform_outputs.outputs.terraform_outputs }}'
-          
-          DEPLOYMENT_ID=$(echo "$TERRAFORM_OUTPUTS" | jq -r '.deployment_id // ""')
-          PLATFORM="${DEPLOYMENT_ID}-platform-0.setups.support-tunnel.singulr.ai"  # Matches Terraform pattern: "${local.deployment_id_result}-platform-${count.index}.setups.support-tunnel.singulr.ai"
-          COLLECTORS='[]'  # From workflow input, matches var.collector in Terraform
-          TENANT_ID=$(echo "$TERRAFORM_OUTPUTS" | jq -r '.tenant_id // ""')
-          TENANT_ENDPOINT="https://api.${{ github.event.inputs.domain_name }}"  # Matches "https://api.${var.domain_name}" in Terraform
-          CUSTOMER_NAME="${{ github.event.inputs.customer_name }}"  # Matches var.customer_name in Terraform
-          DISTRIBUTION_ID=$(echo "$TERRAFORM_OUTPUTS" | jq -r '.cloudfront_distribution_id // ""')  # Matches aws_cloudfront_distribution.ui_distribution.id
-          BUCKET_NAME=$(echo "$TERRAFORM_OUTPUTS" | jq -r '.s3_bucket_name // ""')  # Matches aws_s3_bucket.ui_bucket.bucket
-          DESCOPPE_PROJECT_ID=$(echo "$TERRAFORM_OUTPUTS" | jq -r '.project_id // ""')  # Matches descope_project.my-project.id
-          
-          echo "Running tenant details update script with:"
-          echo "Platform: $PLATFORM"
-          echo "Collectors: $COLLECTORS"
-          echo "Tenant ID: $TENANT_ID"
-          echo "Tenant Endpoint: $TENANT_ENDPOINT"
-          echo "Customer Name: $CUSTOMER_NAME"
-          echo "Distribution ID: $DISTRIBUTION_ID"
-          echo "Bucket Name: $BUCKET_NAME"
-          echo "Descope Project ID: $DESCOPPE_PROJECT_ID"
-          
-          # Execute the Python script exactly as Terraform data.tf does
-          python3 updating_json.py \
-            "$PLATFORM" \
-            "$COLLECTORS" \
-            "$TENANT_ID" \
-            "$TENANT_ENDPOINT" \
-            "$CUSTOMER_NAME" \
-            "$DISTRIBUTION_ID" \
-            "$BUCKET_NAME" \
-            "$DESCOPPE_PROJECT_ID"
-          
-          echo "Tenant details updated successfully"
-
-      - name: Deploy UI for Customer
-        run: |
-          yarn install
-          yarn deploy:env "test"
-          
-          echo "UI deployment completed successfully"
 
       - name: Create feature branch
         id: create_branch
